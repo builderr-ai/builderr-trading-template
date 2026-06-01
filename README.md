@@ -2,7 +2,7 @@
 
 Submission template for the **builderr Trading Agent Leaderboard**.
 
-Fork this repo, implement `decide()` in `agent.py`, push to a public GitHub repo, then submit at https://builderr.ai/trading-v0 (or just email the link to `submit@builderr.ai`). Full rules &amp; FAQ: https://builderr.ai/guidelines
+Fork this repo, implement `decide()` in `agent.py`, then send us the repo — **public or private, your call** (private repos use a read-only deploy key; see [«Submission»](#submission)). Submit at https://builderr.ai/trading-v0 (or just email the link to `submit@builderr.ai`). Full rules &amp; FAQ: https://builderr.ai/guidelines
 
 ---
 
@@ -10,7 +10,7 @@ Fork this repo, implement `decide()` in `agent.py`, push to a public GitHub repo
 
 1. **Fork this repo** on GitHub.
 2. **Implement `decide()`** in `agent.py`. The full contract is in the docstring + the [&laquo;The contract&raquo;](#the-contract) section below. Look at `baseline.py` and `soham_agent_v2.py` for two real reference implementations (the latter passes Phase A end-to-end).
-3. **Push to a public GitHub repo.**
+3. **Push to a GitHub repo** — public, or private with a read-only deploy key (your call; [«Submission»](#submission) explains the trade-offs).
 4. **Email the repo URL** to `submit@builderr.ai` (see [&laquo;Submission&raquo;](#submission)). We run Phase A on our infrastructure within 24h and email you the score.
 
 > **Test locally before you submit:** run **`python selfcheck.py`** — it needs no engine, no network, and no keys. It loads your `agent.py`, feeds it synthetic daily bars, and checks `decide()` returns well-formed orders and doesn't crash. It&apos;s a smoke test, not the real eval (we run admission centrally on hidden data so it&apos;s identical for everyone), but it catches the dumb bugs first.
@@ -133,13 +133,20 @@ Top finishers are re-run on **fresh windows (calm + stress) they've never seen**
 
 ## Submission
 
-When ready:
-1. Push your repo to public GitHub.
-2. Email the repo URL to **submit@builderr.ai** (subject: `builderr submission — <your name>`).
-3. We run admission within 24h; you'll get your robustness profile by email.
-4. If admitted, you're in the next Phase B cohort.
+You don't have to make your code public. Pick the path you're comfortable with — same competition, same scoring, regardless. All three: email the link to **submit@builderr.ai** (subject: `builderr submission — <your name>`); we run admission within 24h and email your robustness profile; if admitted you're in the next Phase B cohort.
 
-Alt path (proprietary models / BYOK): host an HTTPS endpoint that accepts `POST /decide` with `{market_state, portfolio_state, cash}` and returns `{orders: [...]}`. Per-agent latency is published on the leaderboard. Include the endpoint URL in your submission email.
+**1. Public repo** *(simplest)*
+Push to a public GitHub repo, email the URL. Zero access setup and you get a public proof-of-work piece — but the field can read your strategy while the contest runs, and a public repo is the easiest place to leak a key. Good if you don't mind being open (or you'll open it after the contest anyway).
+
+**2. Private repo, read-only access** *(protects your edge)*
+Keep the repo private. Email us first; we reply with a **read-only deploy key** (one line). You paste it into `Settings → Deploy keys` with **"Allow write access" left OFF**, then reply. We clone, you delete the key after.
+- We get **read access to that one repo and nothing else** — we *cannot push to it*, can't see your other repos, and access dies when you remove the key.
+- Why not "add us as a collaborator"? On a personal GitHub repo a collaborator gets **write** access. We don't want that and you shouldn't grant it. A deploy key is read-only and scoped to the single repo.
+
+**3. Endpoint mode** *(airtight — you never share code)*
+Host an HTTPS endpoint that accepts `POST /decide` with `{market_state, portfolio_state, cash}` and returns `{orders: [...]}`. We send data; you return orders. Your code, prompts, and any API keys never leave your server. Per-agent latency is published on the leaderboard so it stays fair. Include the endpoint URL in your email.
+
+> Whichever you pick: we only ever read and run your code to score it. We don't reuse your strategy, and you keep the IP (this template is MIT; your repo stays yours).
 
 Or email **inquiries@builderr.ai** for early access / questions.
 
