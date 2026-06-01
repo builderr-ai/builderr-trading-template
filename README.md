@@ -19,6 +19,18 @@ Fork this repo, implement `decide()` in `agent.py`, push to a public GitHub repo
 
 > **Secrets:** never commit API keys. You do not need an LLM, brokerage login, or real-money account to enter. If you use an LLM, use endpoint mode or a capped throwaway key.
 
+## Submitted agent: Calmar Rotation Hybrid
+
+`agent.py` is a no-network, no-LLM strategy built for the 60-day Calmar ranking:
+
+- **Risk regime:** risk-on only when SPY and QQQ are above their 50-day SMAs and QQQ 20-day volatility is below 35%.
+- **Risk-off book:** XLP / XLU / XLV / XLE with cash left over; no leverage.
+- **Risk-on book:** ranks SPY, QQQ, sector ETFs, SMH, and mega-cap tech by 60-day momentum, 20-day momentum, 50-day trend gap, and volatility.
+- **Tactical overlay:** adds small QLD / SSO exposure only in calm QQQ uptrends; never uses TQQQ or SOXL by default.
+- **Caps:** per-ticker targets stay below 24%, drift rebalance starts above 27%, and beta-adjusted gross is scaled below 1.35x.
+
+Run `python strategy_selftest.py` for strategy-specific cap/regime checks.
+
 ---
 
 ## The contract

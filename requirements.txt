@@ -1,6 +1,1 @@
-# Add any dependencies your agent needs.
-# numpy + pandas are pre-installed on the builderr sandbox; you don't need to list them.
-# If you use an LLM, install one of these and point base_url at https://proxy.builderr.ai
-# anthropic>=0.40
-# openai>=1.40
-# google-genai>=0.4
+# No third-party packages required by agent.py.
