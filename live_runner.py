@@ -27,34 +27,24 @@ import yfinance as yf
 HERE = Path(__file__).parent
 OUT = HERE / "leaderboard.json"
 
-UNIVERSE = [
-    # mega-cap tech / internet
-    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "NVDA", "TSLA", "NFLX",
-    # semis / AI infra
-    "AVGO", "AMD", "MU", "MRVL", "QCOM", "TXN", "INTC", "AMAT", "LRCX", "KLAC", "ADI", "NXPI", "ARM", "TSM",
-    # software / cloud
-    "ORCL", "CRM", "ADBE", "INTU", "NOW", "PANW", "SNOW", "CRWD", "DDOG", "NET", "SHOP", "UBER", "ABNB", "PYPL",
-    # comms / media
-    "CMCSA", "TMUS", "VZ", "T", "DIS",
-    # consumer
-    "WMT", "COST", "HD", "LOW", "TGT", "NKE", "SBUX", "MCD", "CMG", "KO", "PEP", "PG", "CL", "PM", "MO", "MDLZ", "MNST",
-    # financials
-    "JPM", "BAC", "WFC", "C", "GS", "MS", "BLK", "SCHW", "AXP", "V", "MA", "COF", "USB", "PNC",
-    # healthcare / pharma
-    "UNH", "JNJ", "LLY", "PFE", "MRK", "ABBV", "ABT", "TMO", "DHR", "BMY", "AMGN", "GILD", "CVS", "MDT", "ISRG", "VRTX", "REGN",
-    # industrials / energy
-    "BA", "CAT", "GE", "HON", "UPS", "RTX", "LMT", "DE", "MMM", "UNP", "FDX", "XOM", "CVX", "COP", "SLB", "EOG", "OXY",
-    # autos / popular retail names
-    "F", "GM", "PLTR", "COIN", "SOFI", "HOOD", "RBLX", "DKNG", "RIVN",
-    # index ETFs
-    "SPY", "QQQ", "DIA", "IWM", "VTI", "VOO",
-    # sector ETFs
-    "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU", "XLRE", "XLC", "XLB",
-    # industry / thematic ETFs
-    "SMH", "SOXX", "IGV", "ARKK", "XBI", "IBB", "KRE", "GDX", "GLD", "SLV", "TLT", "HYG", "USO",
-    # leveraged ETFs
-    "TQQQ", "SOXL", "UPRO", "SPXL", "QLD", "SSO",
-]
+def _load_universe() -> list[str]:
+    """The tradeable universe is the FROZEN snapshot in universe.json (top ~1000
+    US names by liquidity, built by build_universe.py at round open). Same list
+    for the board and the admission engine; stable for the whole round."""
+    f = HERE / "universe.json"
+    if f.exists():
+        try:
+            tickers = (json.loads(f.read_text()) or {}).get("tickers") or []
+            if tickers:
+                return list(dict.fromkeys(tickers))
+        except Exception:  # noqa: BLE001
+            pass
+    # fallback if the snapshot is somehow missing
+    return ["SPY", "QQQ", "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA",
+            "AVGO", "AMD", "MU", "MRVL", "TQQQ", "SOXL", "QLD", "SSO"]
+
+
+UNIVERSE = _load_universe()
 
 # The live field — file -> (display name, label). House/reference bots set the
 # bar; real Round 1 entrants are labeled as such, never disguised as house bots.
@@ -110,29 +100,34 @@ def _rows_from_df(df, need):
     return rows[-need:] if len(rows) >= need - 60 else None  # tolerate short histories
 
 
+CHUNK = 200  # tickers per batched yfinance call (1000-name universe → ~5 calls)
+
+
 def fetch_bars() -> dict[str, list[dict]]:
-    """Fetch daily bars for the whole universe in ONE batched call — far faster
-    and fewer rate-limit hits than a request per ticker."""
+    """Fetch daily bars for the whole (~1000-name) universe in batched chunks —
+    one yfinance call per chunk, tolerant of any ticker/chunk that fails."""
     need = EVAL_DAYS + WARMUP_DAYS + 30
     bars: dict[str, list[dict]] = {}
-    try:
-        raw = yf.download(UNIVERSE, period="2y", interval="1d", auto_adjust=True,
-                          progress=False, threads=True, group_by="ticker")
-    except Exception:
-        return bars
-    if raw is None or getattr(raw, "empty", True):
-        return bars
-    multi = hasattr(raw.columns, "nlevels") and raw.columns.nlevels > 1
-    for t in UNIVERSE:
+    for i in range(0, len(UNIVERSE), CHUNK):
+        chunk = UNIVERSE[i:i + CHUNK]
         try:
-            df = raw[t] if multi else raw
-        except KeyError:
+            raw = yf.download(chunk, period="2y", interval="1d", auto_adjust=True,
+                              progress=False, threads=True, group_by="ticker")
+        except Exception:  # noqa: BLE001
             continue
-        if df is None or df.empty:
+        if raw is None or getattr(raw, "empty", True):
             continue
-        r = _rows_from_df(df, need)
-        if r:
-            bars[t] = r
+        multi = hasattr(raw.columns, "nlevels") and raw.columns.nlevels > 1
+        for t in chunk:
+            try:
+                df = raw[t] if multi else raw
+            except KeyError:
+                continue
+            if df is None or df.empty:
+                continue
+            r = _rows_from_df(df, need)
+            if r:
+                bars[t] = r
     return bars
 
 

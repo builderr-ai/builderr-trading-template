@@ -46,18 +46,9 @@ CURE, DRN, UDOW, NAIL · 2× = QLD, SSO, DDM, ROM, UWM, AGQ · 1× = everything 
 So 100% TQQQ = 3× = breach. 50% TQQQ + 50% cash = 1.5× = OK.
 
 ## Universe (what you can trade)
-~140 of the most-liquid US stocks + ETFs (anything outside the list is silently ignored):
-- **Mega-cap tech / internet:** AAPL MSFT GOOGL GOOG AMZN META NVDA TSLA NFLX
-- **Semis / AI infra:** AVGO AMD MU MRVL QCOM TXN INTC AMAT LRCX KLAC ADI NXPI ARM TSM
-- **Software / cloud:** ORCL CRM ADBE INTU NOW PANW SNOW CRWD DDOG NET SHOP UBER ABNB PYPL
-- **Comms / media:** CMCSA TMUS VZ T DIS
-- **Consumer:** WMT COST HD LOW TGT NKE SBUX MCD CMG KO PEP PG CL PM MO MDLZ MNST
-- **Financials:** JPM BAC WFC C GS MS BLK SCHW AXP V MA COF USB PNC
-- **Healthcare / pharma:** UNH JNJ LLY PFE MRK ABBV ABT TMO DHR BMY AMGN GILD CVS MDT ISRG VRTX REGN
-- **Industrials / energy:** BA CAT GE HON UPS RTX LMT DE MMM UNP FDX XOM CVX COP SLB EOG OXY
-- **Autos / popular retail:** F GM PLTR COIN SOFI HOOD RBLX DKNG RIVN
-- **ETFs:** SPY QQQ DIA IWM VTI VOO · XLK XLF XLE XLV XLI XLY XLP XLU XLRE XLC XLB · SMH SOXX IGV ARKK XBI IBB KRE GDX GLD SLV TLT HYG USO
-- **Leveraged (long):** TQQQ SOXL UPRO SPXL QLD SSO  (3x: TQQQ/SOXL/UPRO/SPXL · 2x: QLD/SSO — count 3x/2x toward the 1.5x gross cap)
+The **top ~1000 US names by liquidity** — basically everything that actually trades: AAPL MSFT NVDA AMZN META GOOGL TSLA AMD AVGO MU MRVL QCOM PLTR COIN JPM V MA UNH LLY XOM CVX … plus broad/sector/thematic ETFs (SPY QQQ IWM, XLK…XLB, SMH GLD TLT …) and long leveraged sleeves (3x: TQQQ SOXL UPRO SPXL · 2x: QLD SSO).
+- Ranked by trailing dollar-volume and **frozen at round open** (same list for everyone, stable all round). Exact list: **`universe.json`** in the repo.
+- Leveraged ETFs count 3x/2x toward the 1.5x gross cap; everything else is 1x. Anything off the list is silently ignored.
 
 Tickers outside the universe are ignored.
 

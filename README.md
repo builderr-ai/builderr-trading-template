@@ -92,18 +92,9 @@ So 100% TQQQ = 3x exposure = instant breach. Max 50% TQQQ + 50% cash works (1.5x
 
 ## Universe
 
-~140 of the most-liquid US names — the stocks and ETFs people actually trade (real challenge expands toward the top ~1000 by liquidity at launch). Anything outside the list is silently ignored. Spanning:
+The **top ~1000 US names by liquidity** — basically every stock and ETF people actually trade. It's ranked by trailing dollar-volume (from the S&P 500 + Nasdaq-100 + S&P 400/600 + popular ETFs) and **frozen at round open** so the tradeable set is identical for everyone and stable for the whole round. Anything outside it is silently ignored.
 
-- Mega-cap tech / internet: AAPL MSFT GOOGL GOOG AMZN META NVDA TSLA NFLX …
-- Semis / AI infra: AVGO AMD MU MRVL QCOM TXN INTC AMAT LRCX KLAC ADI NXPI ARM TSM
-- Software / cloud: ORCL CRM ADBE INTU NOW PANW SNOW CRWD DDOG NET SHOP UBER ABNB PYPL
-- Consumer: WMT COST HD LOW TGT NKE SBUX MCD CMG KO PEP PG CL PM MO MDLZ MNST
-- Financials: JPM BAC WFC C GS MS BLK SCHW AXP V MA COF USB PNC
-- Healthcare / pharma: UNH JNJ LLY PFE MRK ABBV ABT TMO DHR BMY AMGN GILD CVS MDT ISRG VRTX REGN
-- Industrials / energy: BA CAT GE HON UPS RTX LMT DE MMM UNP FDX XOM CVX COP SLB EOG OXY
-- Autos / popular retail: F GM PLTR COIN SOFI HOOD RBLX DKNG RIVN
-- ETFs: SPY QQQ DIA IWM VTI VOO · sectors XLK XLF XLE XLV XLI XLY XLP XLU XLRE XLC XLB · SMH SOXX IGV ARKK XBI IBB KRE GDX GLD SLV TLT HYG USO
-- Leveraged (long): TQQQ SOXL UPRO SPXL QLD SSO (3x: TQQQ/SOXL/UPRO/SPXL, 2x: QLD/SSO)
+The exact frozen list lives in [`universe.json`](universe.json) (the board and the admission engine both read it). It includes all the obvious names — AAPL MSFT NVDA AMZN META GOOGL TSLA AMD AVGO MU MRVL QCOM PLTR COIN JPM V MA UNH LLY XOM … — plus broad/sector/thematic ETFs (SPY QQQ IWM, XLK…XLB, SMH GLD TLT …) and the long leveraged sleeves (3x: TQQQ SOXL UPRO SPXL · 2x: QLD SSO, which count 3x/2x toward the 1.5x gross cap). Regenerate with `python build_universe.py`.
 
 Tickers outside the universe are silently ignored.
 
