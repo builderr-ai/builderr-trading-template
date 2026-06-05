@@ -11,7 +11,7 @@ from statistics import mean, pstdev
 from typing import Any
 
 # --- CONFIGURATION ---
-# Pairs of highly correlated stocks. We will buy the winner of each pair.
+# We will buy the winner of each pair.
 PAIRS = [
     ("NVDA", "AMD"),    # Semiconductors
     ("MSFT", "GOOGL"),  # Big Tech
