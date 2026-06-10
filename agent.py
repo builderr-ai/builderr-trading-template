@@ -648,7 +648,7 @@ def decide(
         or forced_derisk
     )
 
-    targets = target_weights(market_state) if should_rebalance or (days_since is not None and days_since >= 3) else {}
+    targets = target_weights(market_state) if should_rebalance else {}
     if not should_rebalance and targets:
         should_rebalance = _target_distance(_last_targets, targets) >= 0.24
     if not should_rebalance:
