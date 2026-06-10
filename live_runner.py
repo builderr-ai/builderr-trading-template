@@ -64,6 +64,20 @@ FIELD = [
     ("harsimran_agent.py",           "harsimran",              "round 1 · entrant"),
     ("sankeerth_agent.py",           "sankeerth",              "round 1 · entrant"),
     ("siddu_agent.py",               "siddu",                  "round 1 · entrant"),
+    ("rohit_agent.py",               "rohit",                  "round 1 · entrant"),
+    ("arnav_agent.py",               "arnav",                  "round 1 · entrant"),
+    ("nagarjuna_agent.py",           "nagarjuna",              "round 1 · entrant"),
+    ("balaji_agent.py",              "balaji",                 "round 1 · entrant"),
+]
+
+# Private entrants (read-only deploy-key path). Their CODE never enters this
+# PUBLIC repo. We score them locally from PRIVATE_DIR (gitignored) and publish
+# only their numbers, persisted in private_results.json — so the cron (which
+# can't see their code) keeps them on the board with their last-scored result.
+PRIVATE_DIR = HERE / "private_agents"
+PRIVATE_RESULTS = HERE / "private_results.json"
+PRIVATE_FIELD = [
+    ("eshwar_agent.py",              "eshwar",                 "round 1 · entrant"),
 ]
 
 EVAL_DAYS = 60       # (history sizing only) trailing window used when fetching bars
@@ -83,6 +97,15 @@ def beta(t: str) -> float:
 def load_decide(filename: str):
     import importlib.util
     spec = importlib.util.spec_from_file_location(filename.replace(".py", ""), HERE / filename)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.decide
+
+
+def load_decide_from(path: Path):
+    """Load decide() from an arbitrary path (used for local-only private agents)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod.decide
@@ -257,6 +280,33 @@ def main() -> int:
                      "equity": m["equity"], "pnl": m["pnl"],
                      "ret": round(m["ret"], 4), "trades": m["trades"]})
         print(f"  {name:24s} ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  Trades={m['trades']}")
+
+    # Private entrants: score locally if their (gitignored) code is present;
+    # otherwise fall back to last-scored numbers in private_results.json. Either
+    # way, only numbers are published — their code never enters this public repo.
+    saved = {}
+    if PRIVATE_RESULTS.exists():
+        try:
+            saved = json.loads(PRIVATE_RESULTS.read_text()) or {}
+        except Exception:  # noqa: BLE001
+            saved = {}
+    for filename, name, label in PRIVATE_FIELD:
+        p = PRIVATE_DIR / filename
+        if p.exists():
+            try:
+                m = run_bot(load_decide_from(p), bars)
+                saved[name] = {"label": label, "equity": m["equity"], "pnl": m["pnl"],
+                               "ret": round(m["ret"], 4), "trades": m["trades"], "as_of": asof}
+                print(f"  {name:24s} (private) ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  Trades={m['trades']}")
+            except Exception as e:  # noqa: BLE001
+                print(f"skip private {filename}: {e!r}")
+        rec = saved.get(name)
+        if rec:
+            rows.append({"name": name, "label": rec["label"], "equity": rec["equity"],
+                         "pnl": rec["pnl"], "ret": rec["ret"], "trades": rec["trades"]})
+    if saved:
+        PRIVATE_RESULTS.write_text(json.dumps(saved, indent=2))
+
     rows.sort(key=lambda r: r["ret"], reverse=True)
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),

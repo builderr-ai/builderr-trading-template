@@ -1,12 +1,14 @@
 name: live-leaderboard
 
-# Refresh the leaderboard on real market data through each US trading day and
-# commit leaderboard.json (the site reads it). Hourly while the US market is open
-# means the numbers genuinely move during the session (the daily bar's last price
-# updates intraday) — not faked motion, just real marks. Manual run available too.
+# Refresh the leaderboard on real market data while the US market is open and
+# commit leaderboard.json (the site reads it). Every 2 hours during the session
+# means the numbers genuinely move (the daily bar's last price updates intraday) —
+# not faked motion, just real marks. No runs after the close. Manual run available.
 on:
   schedule:
-    - cron: "0 13-22 * * 1-5" # hourly ~9:00–18:00 ET (pre-open through after-close), Mon–Fri (UTC)
+    # Every 2h while the US market is open: 14/16/18/20 UTC = ~10:00 ET through the
+    # 16:00 ET (20:00 UTC) close, Mon–Fri. Set for EDT (the Round 1 window). No runs after close.
+    - cron: "0 14,16,18,20 * * 1-5"
   workflow_dispatch:
 
 permissions:
@@ -28,6 +30,6 @@ jobs:
         run: |
           git config user.name "builderr-bot"
           git config user.email "noreply@builderr.ai"
-          git add leaderboard.json
+          git add leaderboard.json private_results.json
           git diff --staged --quiet || git commit -m "live leaderboard $(date -u +%FT%TZ)"
           git push
