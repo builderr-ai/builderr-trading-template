@@ -343,11 +343,11 @@ def main() -> int:
             if d in qbars and base:
                 last = round(START_CASH * qbars[d]["close"] / base, 2)
             market.append(last)
-    FEATURED = [  # one clean representative per archetype — names hidden, style shown
-        ("sumegh",                 "Concentrated bet (AI / chips)"),
-        ("mohit",                  "Leveraged momentum"),
-        ("dual-momentum-rotation", "Broad rotation"),
-        ("sankeerth",              "Defensive / regime-switching"),
+    FEATURED = [  # one clean representative per archetype — names hidden, plain-English style
+        ("sumegh",                 "All-in on AI & chips"),
+        ("mohit",                  "Aggressive, amplified bet"),
+        ("dual-momentum-rotation", "Spread across the market"),
+        ("sankeerth",              "Defensive, sells fast on drops"),
     ]
     feat_names = {n for n, _ in FEATURED}
     featured = [{"label": lbl, "curve": curves[n]} for n, lbl in FEATURED if curves.get(n)]
