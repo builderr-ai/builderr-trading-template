@@ -31,6 +31,7 @@ HARD_BRAKE_BASKET = ("XLP", "XLU", "XLV")        # staples + utilities + health 
 
 # ─── Core Knobs ───
 NAME_CAP = 0.12               # no single position above 12% (was 13%)
+SAFE_POSITION_CAP = 0.27      # hard cap at 27% after vol scaling to stay under 30% limit + drift
 GROSS_MAX = 0.95              # total gross exposure cap
 TOP_N_MOMENTUM = 6            # hold top 6 winners (was 5) — better diversification
 REBALANCE_DAYS = 5            # rebalance every N days
@@ -489,6 +490,7 @@ def _scale_weights_for_target_vol(
 ) -> dict[str, float]:
     """
     Scale all weights uniformly so portfolio vol = TARGET_PORTFOLIO_VOL.
+    Cap individual positions at SAFE_POSITION_CAP (27%) to prevent concentration breach.
     """
     if not weights:
         return {}
@@ -501,7 +503,19 @@ def _scale_weights_for_target_vol(
     target_scale = TARGET_PORTFOLIO_VOL / port_vol
     target_scale = max(PORT_VOL_MIN / port_vol, min(PORT_VOL_MAX / port_vol, target_scale))
     
-    return {t: w * target_scale for t, w in weights.items()}
+    scaled = {t: w * target_scale for t, w in weights.items()}
+    
+    # Hard cap: no position exceeds 27% (stays safely under 30% + drift limit)
+    capped = {t: min(w, SAFE_POSITION_CAP) for t, w in scaled.items()}
+    
+    # Renormalize if capping reduced gross below target
+    total = sum(capped.values())
+    if total > 0 and total < GROSS_MAX:
+        # Scale up remaining positions to hit gross target
+        scale = GROSS_MAX / total if total > 0 else 1.0
+        capped = {t: min(w * scale, SAFE_POSITION_CAP) for t, w in capped.items()}
+    
+    return capped
 
 
 # ═══════════════════════════════════════════════════════════════════════════
