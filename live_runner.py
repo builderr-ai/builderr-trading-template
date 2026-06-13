@@ -69,6 +69,14 @@ FIELD = [
     ("nagarjuna_agent.py",           "nagarjuna",              "round 1 · entrant"),
     ("balaji_agent.py",              "balaji",                 "round 1 · entrant"),
     ("ajai_agent.py",                "ajai",                   "round 1 · entrant"),
+    ("aksham_agent.py",              "aksham",                 "round 1 · entrant"),
+    ("darshan_agent.py",             "darshan",                "round 1 · entrant"),
+    ("tanishq_agent.py",             "tanishq",                "round 1 · entrant"),
+    ("aarya_agent.py",               "aarya",                  "round 1 · entrant"),
+    # yog + krunal submitted the stock template strategy unmodified (allowed;
+    # told them) — identical code, so identical numbers until they iterate.
+    ("yog_agent.py",                 "yog",                    "round 1 · entrant"),
+    ("krunal_agent.py",              "krunal",                 "round 1 · entrant"),
 ]
 
 # Private entrants (read-only deploy-key path). Their CODE never enters this
@@ -241,6 +249,11 @@ def run_bot(decide, bars: dict[str, list[dict]]) -> dict:
         "pnl": round(equity - START_CASH, 2),
         "ret": equity / START_CASH - 1,
         "trades": trades,
+        "curve": [round(x, 2) for x in curve],  # daily mark-to-close equity, aligned to eval_dates
+        "cash": round(cash, 2),
+        # current holdings (ticker -> shares) so the site can mark them live at
+        # intraday prices between daily runs — real mark-to-market, not faked motion.
+        "holdings": [{"t": t, "q": round(q, 4)} for t, q in positions.items() if q > 0],
     }
 
 
@@ -271,6 +284,7 @@ def main() -> int:
         return 1
     asof = sorted({b["ts"] for rows in bars.values() for b in rows})[-1]
     rows = []
+    curves: dict[str, list] = {}   # name -> daily equity curve, for history.json (the race chart)
     for filename, name, label in FIELD:
         try:
             m = run_bot(load_decide(filename), bars)
@@ -279,7 +293,10 @@ def main() -> int:
             continue
         rows.append({"name": name, "label": label,
                      "equity": m["equity"], "pnl": m["pnl"],
-                     "ret": round(m["ret"], 4), "trades": m["trades"]})
+                     "ret": round(m["ret"], 4), "trades": m["trades"],
+                     # for live intraday marking on the site (public bots only)
+                     "cash": m["cash"], "holdings": m["holdings"]})
+        curves[name] = m["curve"]
         print(f"  {name:24s} ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  Trades={m['trades']}")
 
     # Private entrants: score locally if their (gitignored) code is present;
@@ -319,6 +336,48 @@ def main() -> int:
     }
     OUT.write_text(json.dumps(payload, indent=2))
     print(f"wrote {OUT} ({len(rows)} bots, as of {asof})")
+
+    # ---- history.json — per-day equity curves for the "strategy race" chart ----
+    # The board is a single snapshot; this is the time series behind it. We publish
+    # the market line + a few archetype-representative strategy curves (anonymized,
+    # grouped by style) + the rest of the field as faint context. Honest framing:
+    # each curve is the strategy's CURRENT version replayed over the round on real
+    # daily bars (no lookahead) — not a frozen daily standing. Private entrants are
+    # excluded here (we publish only their numbers on the board, never a full curve).
+    eval_dates = [d for d in sorted({b["ts"] for rs in bars.values() for b in rs}) if d >= ROUND_START]
+    qbars = {b["ts"]: b for b in bars.get("QQQ", [])}
+    market: list[float] = []
+    if eval_dates and qbars:
+        base = qbars.get(eval_dates[0], {}).get("open") or next(iter(qbars.values()))["open"]
+        last = START_CASH
+        for d in eval_dates:
+            if d in qbars and base:
+                last = round(START_CASH * qbars[d]["close"] / base, 2)
+            market.append(last)
+    FEATURED = [  # one clean representative per archetype — names hidden, plain-English style
+        ("sumegh",                 "All-in on AI & chips"),
+        ("mohit",                  "Aggressive, amplified bet"),
+        ("dual-momentum-rotation", "Spread across the market"),
+        ("sankeerth",              "Defensive, sells fast on drops"),
+    ]
+    feat_names = {n for n, _ in FEATURED}
+    featured = [{"label": lbl, "curve": curves[n]} for n, lbl in FEATURED if curves.get(n)]
+    field = [c for n, c in curves.items() if n not in feat_names and c]
+    hist = {
+        "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "as_of_market_date": asof,
+        "round_start": ROUND_START,
+        "start_cash": START_CASH,
+        "dates": eval_dates,
+        "market": {"label": "Nasdaq-100 (the market)", "curve": market},
+        "featured": featured,
+        "field": field,
+        "note": ("Each line is a strategy's current version replayed over the round on real "
+                 "daily bars, no peeking at the future. Names are hidden on purpose; lines are "
+                 "grouped by trading style. The board is the snapshot; this is the time series behind it."),
+    }
+    (HERE / "history.json").write_text(json.dumps(hist, indent=2))
+    print(f"wrote history.json ({len(featured)} featured + {len(field)} field, {len(eval_dates)} days)")
     return 0
 
 
