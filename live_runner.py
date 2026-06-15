@@ -77,6 +77,10 @@ FIELD = [
     # told them) — identical code, so identical numbers until they iterate.
     ("yog_agent.py",                 "yog",                    "round 1 · entrant"),
     ("krunal_agent.py",              "krunal",                 "round 1 · entrant"),
+    # Rohan: regime bot with an optional external-LLM call that is INERT in the
+    # eval (no network/key) — it cleanly falls back to pure-Python logic, which
+    # is what we score. Told him.
+    ("rohan_agent.py",               "rohan",                  "round 1 · entrant"),
 ]
 
 # Private entrants (read-only deploy-key path). Their CODE never enters this
