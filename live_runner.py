@@ -5,7 +5,7 @@ market day and commits leaderboard.json; the site reads it.
 This is honest content, not fakery:
   • The bots are the real reference strategies + admitted entrants in this repo.
   • Numbers are COMPUTED from running them on real daily bars (yfinance), never hardcoded.
-  • Each runs a $100,000 paper account from ROUND_START (Jun 2) to the latest bar, and
+  • Each runs a $100,000 paper account from SCORE_START (the fair common window) to the latest bar, and
     we report the simple, human numbers: account value, P&L, and trades.
 
 It reuses the same fill model and metrics as preview.py, so a bot scores here the
@@ -100,7 +100,11 @@ PRIVATE_FIELD = [
 EVAL_DAYS = 60       # (history sizing only) trailing window used when fetching bars
 WARMUP_DAYS = 220    # extra history so 200-day signals work
 START_CASH = 100_000.0
-ROUND_START = "2026-06-02"   # Round 1 opens — every agent's $100k paper account starts here
+ROUND_START = "2026-06-02"   # Round 1 admission opened
+# Fair scoring: entries for Round 1 closed after the last submission (2026-06-17), and
+# every agent is re-based to a fresh $100k here. The scored days are all AFTER the last
+# entry, so no one can optimise a bot against market history they had already seen.
+SCORE_START = "2026-06-18"   # Round 1 scored window opens — all agents equal, forward-only from here
 SLIP_EQUITY = 0.0005
 SLIP_LEVERAGED = 0.0010
 BETA_3X = {"TQQQ", "SOXL", "UPRO", "SPXL", "TNA", "FAS", "TECL", "LABU", "CURE", "DRN", "UDOW", "NAIL"}
@@ -185,7 +189,7 @@ def run_bot(decide, bars: dict[str, list[dict]]) -> dict:
     — so the book actually holds through, and captures, the day's move.
     """
     all_dates = sorted({b["ts"] for rows in bars.values() for b in rows})
-    eval_dates = [d for d in all_dates if d >= ROUND_START] or all_dates[-1:]
+    eval_dates = [d for d in all_dates if d >= SCORE_START] or all_dates[-1:]
     cash = START_CASH
     positions: dict[str, float] = {}
     avg_cost: dict[str, float] = {}
@@ -338,8 +342,9 @@ def main() -> int:
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "as_of_market_date": asof,
         "round_start": ROUND_START,
+        "scored_from": SCORE_START,
         "start_cash": START_CASH,
-        "note": "Live Round 1 — every agent started with a $100,000 paper account on June 2, same data and fills for everyone, refreshed each market day. The final winner is risk-adjusted (see rules), so no one wins on a single lucky bet.",
+        "note": "Live Round 1 — fair common window. Entries closed and every agent was re-based to the same $100,000 paper account on June 18, then scored on the identical forward market days through July 2 — so no one can optimise against market history they had already seen. Same data and fills for everyone, refreshed each market day. The winner is risk-adjusted and re-checked on market windows no one has seen, so no one wins on a single lucky bet.",
         "bots": rows,
     }
     OUT.write_text(json.dumps(payload, indent=2))
@@ -352,7 +357,7 @@ def main() -> int:
     # each curve is the strategy's CURRENT version replayed over the round on real
     # daily bars (no lookahead) — not a frozen daily standing. Private entrants are
     # excluded here (we publish only their numbers on the board, never a full curve).
-    eval_dates = [d for d in sorted({b["ts"] for rs in bars.values() for b in rs}) if d >= ROUND_START]
+    eval_dates = [d for d in sorted({b["ts"] for rs in bars.values() for b in rs}) if d >= SCORE_START]
     qbars = {b["ts"]: b for b in bars.get("QQQ", [])}
     market: list[float] = []
     if eval_dates and qbars:
