@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-06-18T16:14:41Z",
+  "generated_at_utc": "2026-06-18T16:56:38Z",
   "as_of_market_date": "2026-06-18",
   "round_start": "2026-06-02",
   "start_cash": 100000.0,
@@ -9,113 +9,113 @@
   "market": {
     "label": "Nasdaq-100 (the market)",
     "curve": [
-      100203.5
+      100202.15
     ]
   },
   "featured": [
     {
       "label": "All-in on AI & chips",
       "curve": [
-        102817.16
+        102334.62
       ]
     },
     {
       "label": "Aggressive, amplified bet",
       "curve": [
-        101123.1
+        100955.36
       ]
     },
     {
       "label": "Spread across the market",
       "curve": [
-        99990.65
+        99874.58
       ]
     },
     {
       "label": "Defensive, sells fast on drops",
       "curve": [
-        100410.04
+        100358.22
       ]
     }
   ],
   "field": [
     [
-      99929.41
+      99909.51
     ],
     [
-      100367.36
+      100473.75
     ],
     [
-      99941.75
+      99774.32
     ],
     [
-      99682.64
+      99703.31
     ],
     [
-      100370.51
+      100405.46
     ],
     [
-      99597.54
+      99595.69
     ],
     [
-      99730.61
+      99610.78
     ],
     [
-      101475.47
+      101110.9
     ],
     [
-      99946.62
+      99865.15
     ],
     [
-      101798.67
+      101065.07
     ],
     [
-      100245.9
+      100213.88
     ],
     [
-      102586.24
+      102144.92
     ],
     [
-      99929.84
+      99874.47
     ],
     [
-      99820.64
+      99731.62
     ],
     [
-      99902.05
+      99850.93
     ],
     [
-      99974.14
-    ],
-    [
-      100000.0
-    ],
-    [
-      100370.5
-    ],
-    [
-      99624.89
-    ],
-    [
-      100214.25
-    ],
-    [
-      100214.25
-    ],
-    [
-      100176.67
+      99966.65
     ],
     [
       100000.0
     ],
     [
-      99506.4
+      100282.7
     ],
     [
-      99871.16
+      100287.78
     ],
     [
-      99574.28
+      100156.43
+    ],
+    [
+      100156.43
+    ],
+    [
+      100128.28
+    ],
+    [
+      100000.0
+    ],
+    [
+      99366.3
+    ],
+    [
+      99850.64
+    ],
+    [
+      99411.87
     ]
   ],
   "note": "Each line is a strategy's current version replayed over the round on real daily bars, no peeking at the future. Names are hidden on purpose; lines are grouped by trading style. The board is the snapshot; this is the time series behind it."
