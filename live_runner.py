@@ -85,6 +85,9 @@ FIELD = [
     ("deepika_agent.py",             "deepika",                "round 1 · entrant"),
     ("om_agent.py",                  "om",                     "round 1 · entrant"),
     ("raam_agent.py",                "raam",                   "round 1 · entrant"),
+    ("navika_agent.py",              "navika",                 "round 1 · entrant"),
+    ("yuva_agent.py",                "yuva",                   "round 1 · entrant"),
+    ("shivkumar_agent.py",           "shivkumar",              "round 1 · entrant"),
 ]
 
 # Private entrants (read-only deploy-key path). Their CODE never enters this
@@ -116,13 +119,14 @@ ENTRY = {
     "ai-momentum-basket": "2026-06-01", "sector-rotation": "2026-06-01", "vol-target": "2026-06-01",
     "opu": "2026-06-02", "robert": "2026-06-02", "mohit": "2026-06-03",
     "zaid": "2026-06-04", "sumegh": "2026-06-04", "shyam": "2026-06-06",
-    "harsimran": "2026-06-06", "sankeerth": "2026-06-07", "siddu": "2026-06-07",
+    "harsimran": "2026-06-06", "sankeerth": "2026-06-18", "siddu": "2026-06-07",
     "rohit": "2026-06-08", "eshwar": "2026-06-08", "arnav": "2026-06-09",
     "nagarjuna": "2026-06-09", "balaji": "2026-06-10", "ajai": "2026-06-11",
     "aksham": "2026-06-11", "darshan": "2026-06-11", "tanishq": "2026-06-11",
     "aarya": "2026-06-12", "yog": "2026-06-13", "krunal": "2026-06-13",
     "rohan": "2026-06-15", "dev": "2026-06-15", "deepika": "2026-06-15",
     "om": "2026-06-17", "raam": "2026-06-17",
+    "navika": "2026-06-18", "yuva": "2026-06-18", "shivkumar": "2026-06-17",
 }
 CHART_START = "2026-06-01"   # common x-axis for the illustrative race chart (Round 1 open)
 SLIP_EQUITY = 0.0005
@@ -374,7 +378,7 @@ def main() -> int:
         "round_start": ROUND_START,
         "scoring": "forward-only",
         "start_cash": START_CASH,
-        "note": "Live Round 1 — forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there — so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is risk-adjusted and re-checked on market windows no one has seen, so no one wins on a single lucky bet.",
+        "note": "Live Round 1 — forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there — so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is the best risk-adjusted result (Calmar) over its live window — there is no historical re-run, because in trading all past data is public and fittable, so the forward window is the only real out-of-sample test. Submissions close ~3 days before the round ends, so every bot gets a minimum live window.",
         "bots": rows,
     }
     OUT.write_text(json.dumps(payload, indent=2))

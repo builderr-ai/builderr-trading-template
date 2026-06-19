@@ -1,21 +1,21 @@
 {
-  "generated_at_utc": "2026-06-19T01:26:58Z",
+  "generated_at_utc": "2026-06-19T08:11:09Z",
   "as_of_market_date": "2026-06-18",
   "round_start": "2026-06-02",
   "scoring": "forward-only",
   "start_cash": 100000.0,
-  "note": "Live Round 1 \u2014 forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there \u2014 so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is risk-adjusted and re-checked on market windows no one has seen, so no one wins on a single lucky bet.",
+  "note": "Live Round 1 \u2014 forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there \u2014 so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is the best risk-adjusted result (Calmar) over its live window \u2014 there is no historical re-run, because in trading all past data is public and fittable, so the forward window is the only real out-of-sample test. Submissions close ~3 days before the round ends, so every bot gets a minimum live window.",
   "bots": [
     {
       "name": "arnav",
       "label": "round 1 \u00b7 entrant",
-      "equity": 111613.26,
-      "pnl": 11613.26,
-      "ret": 0.1161,
+      "equity": 111654.1,
+      "pnl": 11654.1,
+      "ret": 0.1165,
       "trades": 20,
       "days": 7,
       "since": "2026-06-09",
-      "cash": 19659.06,
+      "cash": 19699.9,
       "holdings": [
         {
           "t": "MU",
@@ -238,56 +238,15 @@
       ]
     },
     {
-      "name": "sankeerth",
-      "label": "round 1 \u00b7 entrant",
-      "equity": 100822.52,
-      "pnl": 822.52,
-      "ret": 0.0082,
-      "trades": 13,
-      "days": 9,
-      "since": "2026-06-07",
-      "cash": 4605.13,
-      "holdings": [
-        {
-          "t": "AMZN",
-          "q": 57.0
-        },
-        {
-          "t": "SMH",
-          "q": 37.0
-        },
-        {
-          "t": "XLB",
-          "q": 35.0
-        },
-        {
-          "t": "XLRE",
-          "q": 536.0
-        },
-        {
-          "t": "XLI",
-          "q": 29.0
-        },
-        {
-          "t": "XLK",
-          "q": 130.0
-        },
-        {
-          "t": "XLP",
-          "q": 29.0
-        }
-      ]
-    },
-    {
       "name": "balaji",
       "label": "round 1 \u00b7 entrant",
-      "equity": 100709.04,
-      "pnl": 709.04,
+      "equity": 100709.01,
+      "pnl": 709.01,
       "ret": 0.0071,
       "trades": 14,
       "days": 6,
       "since": "2026-06-10",
-      "cash": 57396.35,
+      "cash": 57396.32,
       "holdings": [
         {
           "t": "IWM",
@@ -394,6 +353,39 @@
         {
           "t": "XLK",
           "q": 82.0
+        }
+      ]
+    },
+    {
+      "name": "yuva",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 100527.81,
+      "pnl": 527.81,
+      "ret": 0.0053,
+      "trades": 5,
+      "days": 1,
+      "since": "2026-06-18",
+      "cash": 6824.44,
+      "holdings": [
+        {
+          "t": "AAPL",
+          "q": 62.0
+        },
+        {
+          "t": "IWM",
+          "q": 63.0
+        },
+        {
+          "t": "QQQ",
+          "q": 25.0
+        },
+        {
+          "t": "SMH",
+          "q": 29.0
+        },
+        {
+          "t": "XLK",
+          "q": 99.0
         }
       ]
     },
@@ -605,15 +597,44 @@
       "holdings": []
     },
     {
+      "name": "shivkumar",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 100000.0,
+      "pnl": 0.0,
+      "ret": 0.0,
+      "trades": 0,
+      "days": 1,
+      "since": "2026-06-17",
+      "cash": 100000.0,
+      "holdings": []
+    },
+    {
+      "name": "navika",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 99954.0,
+      "pnl": -46.0,
+      "ret": -0.0005,
+      "trades": 1,
+      "days": 1,
+      "since": "2026-06-18",
+      "cash": 75311.58,
+      "holdings": [
+        {
+          "t": "SPY",
+          "q": 33.0
+        }
+      ]
+    },
+    {
       "name": "om",
       "label": "round 1 \u00b7 entrant",
-      "equity": 99888.81,
-      "pnl": -111.19,
+      "equity": 99891.06,
+      "pnl": -108.94,
       "ret": -0.0011,
       "trades": 8,
       "days": 1,
       "since": "2026-06-17",
-      "cash": 55326.46,
+      "cash": 55328.71,
       "holdings": [
         {
           "t": "TLT",
@@ -749,15 +770,40 @@
       ]
     },
     {
+      "name": "sankeerth",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 99617.71,
+      "pnl": -382.29,
+      "ret": -0.0038,
+      "trades": 3,
+      "days": 1,
+      "since": "2026-06-18",
+      "cash": 40555.19,
+      "holdings": [
+        {
+          "t": "AMAT",
+          "q": 44.0
+        },
+        {
+          "t": "LRCX",
+          "q": 54.0
+        },
+        {
+          "t": "KLAC",
+          "q": 42.0
+        }
+      ]
+    },
+    {
       "name": "raam",
       "label": "round 1 \u00b7 entrant",
-      "equity": 99447.28,
-      "pnl": -552.72,
+      "equity": 99447.18,
+      "pnl": -552.82,
       "ret": -0.0055,
       "trades": 5,
       "days": 1,
       "since": "2026-06-17",
-      "cash": 14568.7,
+      "cash": 14568.6,
       "holdings": [
         {
           "t": "DIA",
@@ -813,13 +859,13 @@
     {
       "name": "zaid",
       "label": "round 1 \u00b7 entrant",
-      "equity": 98994.73,
-      "pnl": -1005.27,
-      "ret": -0.0101,
+      "equity": 99000.79,
+      "pnl": -999.21,
+      "ret": -0.01,
       "trades": 17,
       "days": 10,
       "since": "2026-06-04",
-      "cash": 9902.48,
+      "cash": 9908.54,
       "holdings": [
         {
           "t": "TLT",
