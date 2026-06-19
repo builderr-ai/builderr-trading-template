@@ -5,7 +5,7 @@ market day and commits leaderboard.json; the site reads it.
 This is honest content, not fakery:
   • The bots are the real reference strategies + admitted entrants in this repo.
   • Numbers are COMPUTED from running them on real daily bars (yfinance), never hardcoded.
-  • Each runs a $100,000 paper account from ROUND_START (Jun 2) to the latest bar, and
+  • Each runs a $100,000 paper account from SCORE_START (the fair common window) to the latest bar, and
     we report the simple, human numbers: account value, P&L, and trades.
 
 It reuses the same fill model and metrics as preview.py, so a bot scores here the
@@ -100,7 +100,31 @@ PRIVATE_FIELD = [
 EVAL_DAYS = 60       # (history sizing only) trailing window used when fetching bars
 WARMUP_DAYS = 220    # extra history so 200-day signals work
 START_CASH = 100_000.0
-ROUND_START = "2026-06-02"   # Round 1 opens — every agent's $100k paper account starts here
+ROUND_START = "2026-06-02"   # Round 1 admission opened
+# Fair scoring: entries for Round 1 closed after the last submission (2026-06-17), and
+# every agent is re-based to a fresh $100k here. The scored days are all AFTER the last
+# entry, so no one can optimise a bot against market history they had already seen.
+SCORE_START = "2026-06-18"   # legacy fallback only; per-bot ENTRY dates below are authoritative
+
+# Per-agent submission date (the email/commit date). A bot is scored ONLY from the
+# first market session AFTER this date — forward-only — so no one can optimise against
+# market history they had already seen, and submitting later gives zero edge.
+# "2026-06-01" = live since the Round 1 open (house/reference benchmarks).
+# Going forward: set this to the date the entry email arrived.
+ENTRY = {
+    "drawdown-momentum": "2026-06-01", "dual-momentum-rotation": "2026-06-01",
+    "ai-momentum-basket": "2026-06-01", "sector-rotation": "2026-06-01", "vol-target": "2026-06-01",
+    "opu": "2026-06-02", "robert": "2026-06-02", "mohit": "2026-06-03",
+    "zaid": "2026-06-04", "sumegh": "2026-06-04", "shyam": "2026-06-06",
+    "harsimran": "2026-06-06", "sankeerth": "2026-06-07", "siddu": "2026-06-07",
+    "rohit": "2026-06-08", "eshwar": "2026-06-08", "arnav": "2026-06-09",
+    "nagarjuna": "2026-06-09", "balaji": "2026-06-10", "ajai": "2026-06-11",
+    "aksham": "2026-06-11", "darshan": "2026-06-11", "tanishq": "2026-06-11",
+    "aarya": "2026-06-12", "yog": "2026-06-13", "krunal": "2026-06-13",
+    "rohan": "2026-06-15", "dev": "2026-06-15", "deepika": "2026-06-15",
+    "om": "2026-06-17", "raam": "2026-06-17",
+}
+CHART_START = "2026-06-01"   # common x-axis for the illustrative race chart (Round 1 open)
 SLIP_EQUITY = 0.0005
 SLIP_LEVERAGED = 0.0010
 BETA_3X = {"TQQQ", "SOXL", "UPRO", "SPXL", "TNA", "FAS", "TECL", "LABU", "CURE", "DRN", "UDOW", "NAIL"}
@@ -177,15 +201,17 @@ def fetch_bars() -> dict[str, list[dict]]:
     return bars
 
 
-def run_bot(decide, bars: dict[str, list[dict]]) -> dict:
-    """Run a $100k paper account from ROUND_START (Jun 2) to the latest bar.
+def run_bot(decide, bars: dict[str, list[dict]], entry_date: str = SCORE_START) -> dict:
+    """Run a $100k paper account from the first session AFTER entry_date (the bot's
+    submission) to the latest bar — forward-only, so it is never scored on days its
+    author could already have seen.
 
-    The agent decides on info known through the prior close (the contest launched
-    the night before the open), and orders fill at each session's OPEN (+/- slippage)
-    — so the book actually holds through, and captures, the day's move.
+    The agent decides on info known through the prior close, and orders fill at each
+    session's OPEN (+/- slippage) — so the book actually holds through, and captures,
+    the day's move.
     """
     all_dates = sorted({b["ts"] for rows in bars.values() for b in rows})
-    eval_dates = [d for d in all_dates if d >= ROUND_START] or all_dates[-1:]
+    eval_dates = [d for d in all_dates if d > entry_date] or all_dates[-1:]
     cash = START_CASH
     positions: dict[str, float] = {}
     avg_cost: dict[str, float] = {}
@@ -257,6 +283,7 @@ def run_bot(decide, bars: dict[str, list[dict]]) -> dict:
         "pnl": round(equity - START_CASH, 2),
         "ret": equity / START_CASH - 1,
         "trades": trades,
+        "days": len(curve),   # live market days scored (forward-only window since entry)
         "curve": [round(x, 2) for x in curve],  # daily mark-to-close equity, aligned to eval_dates
         "cash": round(cash, 2),
         # current holdings (ticker -> shares) so the site can mark them live at
@@ -293,19 +320,23 @@ def main() -> int:
     asof = sorted({b["ts"] for rows in bars.values() for b in rows})[-1]
     rows = []
     curves: dict[str, list] = {}   # name -> daily equity curve, for history.json (the race chart)
+    chart_dates = [d for d in sorted({b["ts"] for rs in bars.values() for b in rs}) if d > CHART_START]
     for filename, name, label in FIELD:
+        entry = ENTRY.get(name, SCORE_START)
         try:
-            m = run_bot(load_decide(filename), bars)
+            m = run_bot(load_decide(filename), bars, entry)
         except Exception as e:  # noqa: BLE001
             print(f"skip {filename}: {e!r}")
             continue
         rows.append({"name": name, "label": label,
                      "equity": m["equity"], "pnl": m["pnl"],
                      "ret": round(m["ret"], 4), "trades": m["trades"],
+                     "days": m["days"], "since": entry,
                      # for live intraday marking on the site (public bots only)
                      "cash": m["cash"], "holdings": m["holdings"]})
-        curves[name] = m["curve"]
-        print(f"  {name:24s} ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  Trades={m['trades']}")
+        # right-align the per-bot curve on the common chart axis (flat $100k before entry)
+        curves[name] = [START_CASH] * max(0, len(chart_dates) - len(m["curve"])) + m["curve"]
+        print(f"  {name:24s} ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  {m['days']}d  Trades={m['trades']}")
 
     # Private entrants: score locally if their (gitignored) code is present;
     # otherwise fall back to last-scored numbers in private_results.json. Either
@@ -317,19 +348,22 @@ def main() -> int:
         except Exception:  # noqa: BLE001
             saved = {}
     for filename, name, label in PRIVATE_FIELD:
+        entry = ENTRY.get(name, SCORE_START)
         p = PRIVATE_DIR / filename
         if p.exists():
             try:
-                m = run_bot(load_decide_from(p), bars)
+                m = run_bot(load_decide_from(p), bars, entry)
                 saved[name] = {"label": label, "equity": m["equity"], "pnl": m["pnl"],
-                               "ret": round(m["ret"], 4), "trades": m["trades"], "as_of": asof}
-                print(f"  {name:24s} (private) ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  Trades={m['trades']}")
+                               "ret": round(m["ret"], 4), "trades": m["trades"],
+                               "days": m["days"], "since": entry, "as_of": asof}
+                print(f"  {name:24s} (private) ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  {m['days']}d  Trades={m['trades']}")
             except Exception as e:  # noqa: BLE001
                 print(f"skip private {filename}: {e!r}")
         rec = saved.get(name)
         if rec:
             rows.append({"name": name, "label": rec["label"], "equity": rec["equity"],
-                         "pnl": rec["pnl"], "ret": rec["ret"], "trades": rec["trades"]})
+                         "pnl": rec["pnl"], "ret": rec["ret"], "trades": rec["trades"],
+                         "days": rec.get("days"), "since": rec.get("since")})
     if saved:
         PRIVATE_RESULTS.write_text(json.dumps(saved, indent=2))
 
@@ -338,8 +372,9 @@ def main() -> int:
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "as_of_market_date": asof,
         "round_start": ROUND_START,
+        "scoring": "forward-only",
         "start_cash": START_CASH,
-        "note": "Live Round 1 — every agent started with a $100,000 paper account on June 2, same data and fills for everyone, refreshed each market day. The final winner is risk-adjusted (see rules), so no one wins on a single lucky bet.",
+        "note": "Live Round 1 — forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there — so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is risk-adjusted and re-checked on market windows no one has seen, so no one wins on a single lucky bet.",
         "bots": rows,
     }
     OUT.write_text(json.dumps(payload, indent=2))
@@ -352,7 +387,7 @@ def main() -> int:
     # each curve is the strategy's CURRENT version replayed over the round on real
     # daily bars (no lookahead) — not a frozen daily standing. Private entrants are
     # excluded here (we publish only their numbers on the board, never a full curve).
-    eval_dates = [d for d in sorted({b["ts"] for rs in bars.values() for b in rs}) if d >= ROUND_START]
+    eval_dates = [d for d in sorted({b["ts"] for rs in bars.values() for b in rs}) if d > CHART_START]
     qbars = {b["ts"]: b for b in bars.get("QQQ", [])}
     market: list[float] = []
     if eval_dates and qbars:
