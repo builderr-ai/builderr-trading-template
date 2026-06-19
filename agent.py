@@ -57,12 +57,12 @@ PANIC_GROSS_CAP = 0.25
 
 # asymmetric regime persistence
 CONFIRM_ENTER_RISKON = 2
-CONFIRM_LEAVE_RISKON = 1
+CONFIRM_LEAVE_RISKON = 2
 
 # self-DD governor
-DD_TIER_1 = 0.030
-DD_TIER_2 = 0.050
-DD_TIER_3 = 0.080
+DD_TIER_1 = 0.060
+DD_TIER_2 = 0.100
+DD_TIER_3 = 0.150
 
 # blend in risk-on
 RISKON_RISK_PCT = 0.95
