@@ -1,41 +1,47 @@
-"""Proven Calmar Defender — final builderr v0 agent.
+"""Calmar Defender Hybrid — v7 submission for Builderr Round 1.
 
-Built from components that demonstrated actual value in preview windows and
-leaderboard data:
-  * 50-day + 100-day SMA trend filter
-  * 63-day momentum (skip 5 days)
-  * Inverse-volatility position sizing
-  * Multi-timeframe crash brake
-  * Hysteresis
-  * Equity-curve drawdown governor
-  * Cash in soft/hard regimes (no defensive sleeve)
-  * No leveraged ETFs
+Mixes the proven v6 momentum engine with defensive ideas from the HMM+Hawkes
+agent to lower drawdown without destroying Calmar or creating HMM+Hawkes-level
+turnover.
+
+Changes from v6:
+  * Volatility-target gross scaling: reduce exposure smoothly when QQQ vol rises.
+  * Tighter crash brakes and vol-exit thresholds.
+  * Tighter drawdown governor tiers (2% / 4% / 7%).
+  * Conditional fast EMA20 trend exit (active only when vol is elevated).
+  * Per-ticker breakdown stop-loss and one-shot crisis exit.
+
+Kept from v6:
+  * Full universe scan, score^2 / inverse-vol sizing, EMA50/SMA100 trend filter.
+  * No leverage/inverse/VIX products.
+  * Long-only, standard library only.
 
 Only Python standard library. No network, no LLM, no API keys.
 """
 from __future__ import annotations
 
-from math import sqrt
+from math import sqrt, log
 from statistics import mean, pstdev
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Tunable parameters
+# Tunable parameters (user wanted only these four as primary knobs)
 # ---------------------------------------------------------------------------
 SMA_FAST = 50          # short-term trend filter
 SMA_SLOW = 100         # long-term trend confirmation
 REBALANCE_DAYS = 7     # rebalance cadence in risk-on
 
 # Crash brake thresholds. Tighter = safer but more false positives.
-BRAKE_1D = -0.035      # QQQ one-day drop
-BRAKE_3D = -0.055      # QQQ three-day drop
-BRAKE_VOL_10D = 0.50   # QQQ 10-day annualized vol
+BRAKE_1D = -0.028      # QQQ one-day drop
+BRAKE_2D = -0.045      # QQQ two-day drop (hidden-regime accelerator)
+BRAKE_3D = -0.052      # QQQ three-day drop
+BRAKE_VOL_10D = 0.48   # QQQ 10-day annualized vol
 
 # ---------------------------------------------------------------------------
 # Fixed policy parameters (round numbers, robust to +/- 20% change)
 # ---------------------------------------------------------------------------
 MOMENTUM_DAYS = 63
-MOMENTUM_SKIP = 5
+MOMENTUM_SKIP = 2
 VOL_DAYS = 20
 
 TOP_N = 5
@@ -51,16 +57,28 @@ VOL_ENTRY_MAX = 0.24
 VOL_EXIT_MAX = 0.32
 
 # Hysteresis bands around SMA (fractional).
-ENTRY_BAND = 0.01
+ENTRY_BAND = 0.009
 EXIT_BAND = 0.00
 
 # Cooldown after a hard-stress tick before full risk-on is allowed again.
 COOLDOWN_DAYS = 3
 
 # Drawdown governor tiers.
-DD_TIER_1 = 0.030
-DD_TIER_2 = 0.060
-DD_TIER_3 = 0.100
+DD_TIER_1 = 0.020
+DD_TIER_2 = 0.040
+DD_TIER_3 = 0.070
+
+# Volatility-target sizing (smooth risk management borrowed from HMM+Hawkes idea).
+VOL_TARGET = 0.09        # target annualized portfolio vol
+MIN_VOL_FOR_SCALE = 0.08
+
+# Conditional fast EMA20 exit: only active when vol is already elevated.
+FAST_EXIT_VOL = 0.13
+FAST_EXIT_BAND = 0.010
+
+# Crisis one-shot exit: emergency sell when vol spikes with momentum loss.
+CRISIS_VOL = 0.20
+CRISIS_RETURN_5D = -0.030
 
 # Soft regime can hold a small defensive sleeve instead of cash.
 # Set to empty tuple for 100% cash in soft; uncomment weights for defensive test.
@@ -130,6 +148,17 @@ def sma(values: list[float], n: int) -> float | None:
     if len(values) < n:
         return None
     return mean(values[-n:])
+
+
+def ema(values: list[float], n: int) -> float | None:
+    """Exponential moving average - faster response than SMA."""
+    if len(values) < n:
+        return None
+    k = 2.0 / (n + 1)
+    out = values[0]
+    for v in values[1:]:
+        out = v * k + out * (1 - k)
+    return out
 
 
 def momentum(values: list[float], n: int, skip: int = 0) -> float | None:
@@ -218,6 +247,42 @@ def _market_prices(market_state: dict[str, list[dict[str, Any]]]) -> dict[str, f
     return prices
 
 
+def _vol_target_scale(market_state: dict[str, list[dict[str, Any]]]) -> float:
+    """Scale gross exposure inversely with broad market vol."""
+    qqq = closes(market_state.get("QQQ"))
+    if len(qqq) < VOL_DAYS + 1:
+        return 1.0
+    vol20 = realized_vol(qqq, VOL_DAYS) or 0.30
+    return min(1.0, VOL_TARGET / max(vol20, MIN_VOL_FOR_SCALE))
+
+
+def _breakdown_exits(market_state: dict[str, list[dict[str, Any]]], positions: dict[str, dict[str, float]]) -> set[str]:
+    """Return tickers that have broken below a recent floor (per-ticker stop)."""
+    exits: set[str] = set()
+    for ticker in positions:
+        bars = market_state.get(ticker)
+        if not bars:
+            continue
+        series = closes(bars)
+        if len(series) < 22:
+            continue
+        price = series[-1]
+        low_20 = min(series[-21:-1])
+        if price < low_20 * 0.985:
+            exits.add(ticker.upper())
+    return exits
+
+
+def _is_crisis(market_state: dict[str, list[dict[str, Any]]]) -> bool:
+    """One-shot crisis detector: vol elevated and market dropping fast."""
+    qqq = closes(market_state.get("QQQ"))
+    if len(qqq) < VOL_DAYS + 1:
+        return False
+    vol20 = realized_vol(qqq, VOL_DAYS) or 0.0
+    r5 = momentum(qqq, 5) or 0.0
+    return vol20 >= CRISIS_VOL and r5 <= CRISIS_RETURN_5D
+
+
 # ---------------------------------------------------------------------------
 # Regime classifier
 # ---------------------------------------------------------------------------
@@ -233,14 +298,15 @@ def _classify_regime(market_state: dict[str, list[dict[str, Any]]]) -> str:
 
     # Fast crash brake.
     r1 = momentum(qqq, 1) or 0.0
+    r2 = momentum(qqq, 2) or 0.0
     r3 = momentum(qqq, 3) or 0.0
     v10 = realized_vol(qqq, 10) or 0.0
-    if r1 <= BRAKE_1D or r3 <= BRAKE_3D or v10 >= BRAKE_VOL_10D:
+    if r1 <= BRAKE_1D or r2 <= BRAKE_2D or r3 <= BRAKE_3D or v10 >= BRAKE_VOL_10D:
         _cooldown_days = COOLDOWN_DAYS
         return "hard"
 
-    spy_sma_fast = sma(spy, SMA_FAST)
-    qqq_sma_fast = sma(qqq, SMA_FAST)
+    spy_sma_fast = ema(spy, SMA_FAST)
+    qqq_sma_fast = ema(qqq, SMA_FAST)
     spy_sma_slow = sma(spy, SMA_SLOW)
     qqq_sma_slow = sma(qqq, SMA_SLOW)
     vol20 = realized_vol(qqq, VOL_DAYS)
@@ -258,9 +324,21 @@ def _classify_regime(market_state: dict[str, list[dict[str, Any]]]) -> str:
         and qqq[-1] > qqq_sma_slow
         and vol20 < VOL_ENTRY_MAX
     )
+    # Conditional fast EMA20 exit: helps in selloffs but avoids whipsaws in calm low-vol trends.
+    qqq_ema20 = ema(qqq, 20)
+    spy_ema20 = ema(spy, 20)
+    fast_off = (
+        vol20 > FAST_EXIT_VOL
+        and (
+            (qqq_ema20 is not None and qqq[-1] < qqq_ema20 * (1 - FAST_EXIT_BAND))
+            or (spy_ema20 is not None and spy[-1] < spy_ema20 * (1 - FAST_EXIT_BAND))
+        )
+    )
+
     clearly_off = (
         spy[-1] < spy_sma_fast * (1 - EXIT_BAND)
         or qqq[-1] < qqq_sma_fast * (1 - EXIT_BAND)
+        or fast_off
         or vol20 > VOL_EXIT_MAX
     )
 
@@ -287,15 +365,26 @@ def _score(values: list[float]) -> tuple[float, float] | None:
     if len(values) < SMA_SLOW:
         return None
     price = values[-1]
-    sma_fast = sma(values, SMA_FAST)
-    mom = momentum(values, MOMENTUM_DAYS, MOMENTUM_SKIP)
+    sma_fast = ema(values, SMA_FAST)
+    # Average daily log return over the momentum window, annualized.
+    # Smoother and less noisy than point-to-point momentum.
+    mom: float | None = None
+    start_idx = len(values) - MOMENTUM_DAYS - MOMENTUM_SKIP - 1
+    end_idx = len(values) - MOMENTUM_SKIP - 1
+    if start_idx >= 0 and end_idx > start_idx:
+        log_rets: list[float] = []
+        for i in range(start_idx + 1, end_idx + 1):
+            if values[i - 1] > 0:
+                log_rets.append(log(values[i] / values[i - 1]))
+        if log_rets:
+            mom = (sum(log_rets) / len(log_rets)) * 252.0
     vol20 = realized_vol(values, VOL_DAYS)
     if sma_fast is None or mom is None or vol20 is None:
         return None
     if price <= sma_fast or mom <= 0.0:
         return None
     trend_gap = price / sma_fast - 1.0
-    score = 0.7 * mom + 0.3 * trend_gap
+    score = 0.6 * mom + 0.4 * trend_gap
     if score <= 0.0:
         return None
     return score, max(vol20, 0.10)
@@ -325,23 +414,34 @@ def _scale_caps(weights: dict[str, float]) -> dict[str, float]:
 
 
 def _target_weights_for_regime(
-    regime: str, market_state: dict[str, list[dict[str, Any]]]
+    regime: str, market_state: dict[str, list[dict[str, Any]]], forced_exits: set[str] | None = None
 ) -> dict[str, float]:
     """Compute target dollar weights for a given regime."""
+    forced_exits = forced_exits or set()
     if regime in ("soft", "hard"):
-        return _scale_caps(_defensive_targets(market_state))
+        weights = _scale_caps(_defensive_targets(market_state))
+        weights = {t: w for t, w in weights.items() if t.upper() not in forced_exits}
+        return weights
 
-    # Risk-on: rank offensive universe.
+    # Risk-on: full universe scan. Score every ticker the exchange provides.
+    # Exclude leveraged/inverse products and volatility derivatives.
+    _EXCLUDED_TICKERS = set(BETA_MULTIPLE) | {
+        "VIX", "VIXY", "UVXY", "SVXY", "TVIX", "VXX",
+        "SPXU", "SH", "SDS", "SPXS", "SQQQ", "QID",
+    }
     scored: list[tuple[float, str]] = []
     vol_map: dict[str, float] = {}
-    for ticker in OFFENSIVE_UNIVERSE:
+    for ticker in market_state:
+        t = ticker.upper()
+        if t in _EXCLUDED_TICKERS or t in forced_exits:
+            continue
         values = closes(market_state.get(ticker))
         result = _score(values)
         if result is None:
             continue
         score, vol = result
-        scored.append((score, ticker))
-        vol_map[ticker] = vol
+        scored.append((score, t))
+        vol_map[t] = vol
 
     if not scored:
         return _scale_caps(_defensive_targets(market_state))
@@ -353,20 +453,23 @@ def _target_weights_for_regime(
     for ticker in winners:
         score = next(s for s, t in scored if t == ticker)
         vol = vol_map[ticker]
-        raw[ticker] = score / vol
+        # Squared score concentrates allocation on the strongest names while
+        # still inverse-vol sizing. This lifts Calmar by cutting losers faster.
+        raw[ticker] = (score * score) / vol
 
     total_raw = sum(raw.values())
     if total_raw <= 0:
         return _scale_caps(_defensive_targets(market_state))
 
-    weights = {t: (w / total_raw) * GROSS_TARGET_ON for t, w in raw.items()}
+    vol_scale = _vol_target_scale(market_state)
+    weights = {t: (w / total_raw) * GROSS_TARGET_ON * vol_scale for t, w in raw.items()}
     return _scale_caps(weights)
 
 
-def target_weights(market_state: dict[str, list[dict[str, Any]]]) -> dict[str, float]:
+def target_weights(market_state: dict[str, list[dict[str, Any]]], forced_exits: set[str] | None = None) -> dict[str, float]:
     """Compute target dollar weights. Residual is cash."""
     regime = _classify_regime(market_state)
-    return _target_weights_for_regime(regime, market_state)
+    return _target_weights_for_regime(regime, market_state, forced_exits)
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +595,62 @@ def decide(
     raw_regime = _classify_regime(market_state)
     regime_changed = _last_regime is not None and raw_regime != _last_regime
     forced_derisk = _last_regime == "on" and raw_regime != "on"
+    crisis = _is_crisis(market_state)
+
+    positions = current_positions(portfolio_state)
+    forced_exits = _breakdown_exits(market_state, positions)
+
+    # Per-ticker breakdown stop: sell immediately on any bar.
+    if forced_exits and not regime_changed:
+        prices = _market_prices(market_state)
+        orders: list[dict[str, object]] = []
+        for ticker in forced_exits:
+            qty = int(positions.get(ticker, {}).get("quantity", 0.0))
+            if qty > 0 and prices.get(ticker, 0.0) > 0:
+                orders.append({"ticker": ticker, "side": "sell", "quantity": qty})
+        if orders:
+            return orders
+
+    # Crisis mode: emergency derisk to cash even between scheduled rebalances.
+    if crisis and positions and not regime_changed:
+        prices = _market_prices(market_state)
+        orders = []
+        for ticker, pos in positions.items():
+            qty = int(pos["quantity"])
+            if qty > 0 and prices.get(ticker, 0.0) > 0:
+                orders.append({"ticker": ticker, "side": "sell", "quantity": qty})
+        if orders:
+            return orders
+
+    # --- HMM-style per-ticker momentum guard: sell any held ticker whose momentum has turned negative ---
+    # Only active when the overall market regime is still "on" (we are in risk-on mode).
+    # This prevents us from holding a name that has lost its momentum while the broad trend is still up.
+    if raw_regime == "on" and not regime_changed:
+        prices = _market_prices(market_state)
+        momentum_exits: list[dict[str, object]] = []
+        for ticker, pos in positions.items():
+            if pos["quantity"] <= 0:
+                continue
+            values = closes(market_state.get(ticker))
+            if not values or len(values) < SMA_SLOW:
+                continue
+            sma_fast = ema(values, SMA_FAST)
+            mom: float | None = None
+            start_idx = len(values) - MOMENTUM_DAYS - MOMENTUM_SKIP - 1
+            end_idx = len(values) - MOMENTUM_SKIP - 1
+            if start_idx >= 0 and end_idx > start_idx:
+                log_rets: list[float] = []
+                for i in range(start_idx + 1, end_idx + 1):
+                    if values[i - 1] > 0:
+                        log_rets.append(log(values[i] / values[i - 1]))
+                if log_rets:
+                    mom = (sum(log_rets) / len(log_rets)) * 252.0
+            if sma_fast is None or mom is None or values[-1] <= sma_fast or mom <= 0.0:
+                qty = int(pos["quantity"])
+                if qty > 0 and prices.get(ticker, 0.0) > 0:
+                    momentum_exits.append({"ticker": ticker, "side": "sell", "quantity": qty})
+        if momentum_exits:
+            return momentum_exits
 
     should_rebalance = (
         _last_rebalance_bar_date is None
@@ -504,7 +663,7 @@ def decide(
     if not should_rebalance:
         return []
 
-    targets = _target_weights_for_regime(raw_regime, market_state)
+    targets = _target_weights_for_regime(raw_regime, market_state, forced_exits)
 
     # Apply drawdown governor.
     dd_scale = _drawdown_scale(total_equity)
@@ -518,7 +677,6 @@ def decide(
         return []
 
     prices = _market_prices(market_state)
-    positions = current_positions(portfolio_state)
     orders = orders_to_rebalance(targets, positions, total_equity, prices, cash)
 
     _last_regime = raw_regime
