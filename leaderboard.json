@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-06-19T21:09:56Z",
+  "generated_at_utc": "2026-06-20T22:56:06Z",
   "as_of_market_date": "2026-06-18",
   "round_start": "2026-06-02",
   "scoring": "forward-only",
@@ -484,8 +484,8 @@
       "pnl": 0.0,
       "ret": 0.0,
       "trades": 0,
-      "days": 5,
-      "since": "2026-06-11",
+      "days": 1,
+      "since": "2026-06-19",
       "cash": 100000.0,
       "holdings": []
     },
@@ -496,8 +496,8 @@
       "pnl": 0.0,
       "ret": 0.0,
       "trades": 0,
-      "days": 3,
-      "since": "2026-06-15",
+      "days": 1,
+      "since": "2026-06-19",
       "cash": 100000.0,
       "holdings": []
     },
@@ -568,6 +568,35 @@
         {
           "t": "AMD",
           "q": 3.0
+        }
+      ]
+    },
+    {
+      "name": "harsimran",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 99867.35,
+      "pnl": -132.65,
+      "ret": -0.0013,
+      "trades": 4,
+      "days": 1,
+      "since": "2026-06-19",
+      "cash": 68417.63,
+      "holdings": [
+        {
+          "t": "XLU",
+          "q": 174.0
+        },
+        {
+          "t": "XLE",
+          "q": 115.0
+        },
+        {
+          "t": "GLD",
+          "q": 14.0
+        },
+        {
+          "t": "TLT",
+          "q": 139.0
         }
       ]
     },
@@ -742,39 +771,6 @@
         {
           "t": "AAPL",
           "q": 38.0
-        }
-      ]
-    },
-    {
-      "name": "harsimran",
-      "label": "round 1 \u00b7 entrant",
-      "equity": 94114.59,
-      "pnl": -5885.41,
-      "ret": -0.0589,
-      "trades": 5,
-      "days": 9,
-      "since": "2026-06-06",
-      "cash": 70937.81,
-      "holdings": [
-        {
-          "t": "XLP",
-          "q": 69.0
-        },
-        {
-          "t": "XLU",
-          "q": 106.0
-        },
-        {
-          "t": "GLD",
-          "q": 11.0
-        },
-        {
-          "t": "XLE",
-          "q": 70.0
-        },
-        {
-          "t": "TLT",
-          "q": 120.0
         }
       ]
     },
