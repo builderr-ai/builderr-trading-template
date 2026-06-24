@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-06-24T00:04:37Z",
+  "generated_at_utc": "2026-06-24T02:28:48Z",
   "as_of_market_date": "2026-06-23",
   "round_start": "2026-06-02",
   "scoring": "forward-only",
@@ -119,6 +119,47 @@
         {
           "t": "MRVL",
           "q": 68.0
+        }
+      ]
+    },
+    {
+      "name": "sankeerth",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 100493.25,
+      "pnl": 493.25,
+      "ret": 0.0049,
+      "trades": 7,
+      "days": 1,
+      "since": "2026-06-23",
+      "cash": 32092.3,
+      "holdings": [
+        {
+          "t": "AMD",
+          "q": 23.4567
+        },
+        {
+          "t": "MU",
+          "q": 10.3456
+        },
+        {
+          "t": "ARM",
+          "q": 30.4459
+        },
+        {
+          "t": "MRVL",
+          "q": 38.5909
+        },
+        {
+          "t": "QLD",
+          "q": 102.3751
+        },
+        {
+          "t": "DELL",
+          "q": 21.5216
+        },
+        {
+          "t": "SSO",
+          "q": 74.4048
         }
       ]
     },
@@ -623,6 +664,43 @@
       ]
     },
     {
+      "name": "rishchith",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 97767.56,
+      "pnl": -2232.44,
+      "ret": -0.0223,
+      "trades": 6,
+      "days": 2,
+      "since": "2026-06-20",
+      "cash": 3030.03,
+      "holdings": [
+        {
+          "t": "QQQ",
+          "q": 32.0
+        },
+        {
+          "t": "XLK",
+          "q": 103.0
+        },
+        {
+          "t": "XLP",
+          "q": 181.0
+        },
+        {
+          "t": "SMH",
+          "q": 20.0
+        },
+        {
+          "t": "XLU",
+          "q": 292.0
+        },
+        {
+          "t": "XLV",
+          "q": 80.0
+        }
+      ]
+    },
+    {
       "name": "rohan",
       "label": "round 1 \u00b7 entrant",
       "equity": 97437.1,
@@ -937,39 +1015,6 @@
         {
           "t": "AAPL",
           "q": 38.0
-        }
-      ]
-    },
-    {
-      "name": "sankeerth",
-      "label": "round 1 \u00b7 entrant",
-      "equity": 94989.09,
-      "pnl": -5010.91,
-      "ret": -0.0501,
-      "trades": 5,
-      "days": 2,
-      "since": "2026-06-18",
-      "cash": 26482.78,
-      "holdings": [
-        {
-          "t": "AMAT",
-          "q": 39.0
-        },
-        {
-          "t": "KLAC",
-          "q": 75.0
-        },
-        {
-          "t": "LRCX",
-          "q": 37.0
-        },
-        {
-          "t": "AMD",
-          "q": 18.0
-        },
-        {
-          "t": "SOXX",
-          "q": 7.0
         }
       ]
     },
