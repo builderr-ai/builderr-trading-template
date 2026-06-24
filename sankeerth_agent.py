@@ -1,358 +1,729 @@
+"""Forward-only Calmar agent for builderr trading v0.
+
+Design target
+-------------
+The live board now scores from the first market open after submission, so this
+agent is intentionally feed-forward: it uses only the bars supplied in
+``market_state`` and keeps all research priors as static ticker lists.
+
+The current market prior is AI infrastructure leadership: semiconductors,
+memory, optical/networking, and data-center power equipment. The prior only
+decides what names are worth ranking; price action, volatility, drawdown, and a
+small walk-forward linear model decide whether and how much to own.
+
+Rules guardrails
+----------------
+* Long-only, no network, no LLM, no dependencies.
+* Per-name target cap is 24.5%, below the 30% concentration rule.
+* Beta-adjusted gross is clamped below 1.35x, below the 1.5x leverage cap.
+* 2x ETFs are used only as a small overlay in calm, confirmed uptrends.
+"""
 from __future__ import annotations
 
-from math import floor, sqrt
+from math import sqrt
 from statistics import pstdev
 from typing import Any
 
 
-THEME = (
-    "MU", "MRVL", "AMD", "SOXX", "SMH", "NVDA", "AVGO", "QCOM",
-    "XLK", "QQQ", "LRCX", "AMAT", "KLAC", "TSM", "PLTR", "ORCL",
-    "META", "AMZN", "GOOGL", "MSFT", "LLY",
-)
-DEFENSIVE = ("XLP", "XLU", "XLV")
-OVERLAY = ("QLD", "SSO")
+# ---- Universe -----------------------------------------------------------------
 
-BETA = {
-    "QLD": 2.0, "SSO": 2.0, "DDM": 2.0, "ROM": 2.0, "UWM": 2.0, "AGQ": 2.0,
+# Current-event prior: AI compute, memory, networking/optics, and data-center
+# power. All of these are in the frozen builderr universe as of round open except
+# a few harmlessly skipped fallbacks.
+AI_INFRA = (
+    "MU", "AMD", "MRVL", "AVGO", "NVDA", "SMH", "SOXX",
+    "LRCX", "AMAT", "KLAC", "ASML", "ARM", "QCOM", "MPWR", "NXPI", "ON", "TXN",
+    "COHR", "GLW", "CIEN", "ANET", "VRT", "APH", "DELL",
+    "ORCL", "PLTR", "APP", "MSFT", "META", "GOOGL", "AMZN",
+)
+AI_POWER = (
+    "GEV", "VST", "CEG", "ETN", "PWR", "NRG", "SO", "NEE", "WTS", "PH", "TT", "FIX",
+)
+BROAD_RISK = (
+    "QQQ", "SPY", "IWM", "XLK", "XLC", "XLI", "XLF", "XLY", "XLE", "XLV",
+)
+DEFENSIVE = (
+    "XLP", "XLU", "XLV", "GLD", "TLT", "XLE",
+)
+RISK_CANDIDATES = tuple(dict.fromkeys(AI_INFRA + AI_POWER + BROAD_RISK))
+ALL_CANDIDATES = tuple(dict.fromkeys(RISK_CANDIDATES + DEFENSIVE))
+
+THEME_PRIOR = {
+    "MU": 0.020, "AMD": 0.018, "MRVL": 0.017, "AVGO": 0.015, "NVDA": 0.014,
+    "SMH": 0.014, "SOXX": 0.013, "COHR": 0.013, "GLW": 0.012, "ANET": 0.011,
+    "VRT": 0.012, "GEV": 0.011, "ETN": 0.010, "PWR": 0.010, "CEG": 0.009,
+    "ORCL": 0.008, "PLTR": 0.008, "APP": 0.008,
+}
+
+BETA_MULTIPLE = {
     "TQQQ": 3.0, "SOXL": 3.0, "UPRO": 3.0, "SPXL": 3.0, "TNA": 3.0,
     "FAS": 3.0, "TECL": 3.0, "LABU": 3.0, "CURE": 3.0, "DRN": 3.0,
     "UDOW": 3.0, "NAIL": 3.0,
+    "QLD": 2.0, "SSO": 2.0, "DDM": 2.0, "ROM": 2.0, "UWM": 2.0, "AGQ": 2.0,
 }
 
-TOP_N = 5
-NAME_CAP = 0.265
-OVERLAY_CAP = 0.090
-MAX_BETA_GROSS = 1.42
-CORE_FULL = 0.98
-CORE_NEUTRAL = 0.82
-DEF_GROSS = 0.26
-MIN_TRADE_PCT = 0.020
-REBALANCE_DAYS = 2
-TRAIL_STOP = 0.095
 
+# ---- Risk knobs ---------------------------------------------------------------
+
+ANN = sqrt(252.0)
+MIN_BARS = 65
+MAX_WEIGHT = 0.245
+MAX_BETA_GROSS = 1.35
+DRIFT_LIMIT = 0.285
+MIN_TRADE_PCT = 0.012
+REBALANCE_EVERY_BARS = 2
+MAX_ORDERS = 45
+
+TARGET_VOL = 0.22
+VOL_FULL_MAX = 0.36
+VOL_NEUTRAL_MAX = 0.46
+HARD_BRAKE_3D = -0.060
+HARD_BRAKE_5D = -0.085
+HARD_BRAKE_VOL10 = 0.72
+
+ML_FEATURES = 10
+ML_HORIZON = 5
+ML_TRAIN_DAYS = 126
+
+
+# ---- Persistent process state -------------------------------------------------
+
+_tick_count = 0
+_last_seen_stamp: str | None = None
+_last_rebalance_tick = -10**9
+_last_regime: str | None = None
+_last_targets: dict[str, float] = {}
 _peak_equity = 0.0
-_last_rebalance_date: str | None = None
-_highs: dict[str, float] = {}
+_stress_cooldown = 0
+_closes_cache: dict[tuple[int, int, str, float], list[float]] = {}
 
 
-def _date(row: dict[str, Any]) -> str:
-    return str(row.get("ts", ""))[:10]
+# ---- Market helpers -----------------------------------------------------------
+
+def _clean_ticker(ticker: Any) -> str:
+    return str(ticker or "").upper()
 
 
-def _closes(ms: dict[str, list[dict[str, Any]]], ticker: str) -> list[float]:
+def _closes(bars: list[dict[str, Any]] | None) -> list[float]:
+    if not bars:
+        return []
+    try:
+        last = bars[-1]
+        key = (id(bars), len(bars), str(last.get("ts", "")), float(last["close"]))
+        cached = _closes_cache.get(key)
+        if cached is not None:
+            return cached
+    except (KeyError, TypeError, ValueError):
+        key = None
     out: list[float] = []
-    for row in ms.get(ticker, []) or []:
+    for bar in bars:
         try:
-            close = float(row["close"])
+            close = float(bar["close"])
         except (KeyError, TypeError, ValueError):
             return []
-        if close <= 0:
+        if close <= 0.0:
             return []
         out.append(close)
+    if key is not None:
+        if len(_closes_cache) > 5000:
+            _closes_cache.clear()
+        _closes_cache[key] = out
     return out
 
 
-def _sma(values: list[float], n: int) -> float | None:
-    return sum(values[-n:]) / n if len(values) >= n else None
-
-
-def _ret(values: list[float], n: int) -> float | None:
-    if len(values) < n + 1:
+def _sma(values: list[float], n: int, end: int | None = None) -> float | None:
+    if end is None:
+        end = len(values) - 1
+    start = end - n + 1
+    if start < 0 or end >= len(values):
         return None
-    base = values[-(n + 1)]
-    return values[-1] / base - 1.0 if base > 0 else None
+    return sum(values[start:end + 1]) / n
 
 
-def _vol(values: list[float], n: int) -> float | None:
-    if len(values) < n + 1:
+def _ret(values: list[float], n: int, end: int | None = None) -> float | None:
+    if end is None:
+        end = len(values) - 1
+    start = end - n
+    if start < 0 or end >= len(values):
+        return None
+    base = values[start]
+    if base <= 0.0:
+        return None
+    return values[end] / base - 1.0
+
+
+def _ann_vol(values: list[float], n: int, end: int | None = None) -> float | None:
+    if end is None:
+        end = len(values) - 1
+    start = end - n
+    if start < 0 or end >= len(values):
         return None
     rets = []
-    for i in range(len(values) - n, len(values)):
+    for i in range(start + 1, end + 1):
         prev = values[i - 1]
-        if prev <= 0:
+        if prev <= 0.0:
             return None
         rets.append(values[i] / prev - 1.0)
-    return pstdev(rets) * sqrt(252.0) if len(rets) >= 5 else None
+    if len(rets) < 5:
+        return None
+    return pstdev(rets) * ANN
 
 
-def _positions(portfolio: dict[str, Any]) -> dict[str, dict[str, float]]:
-    out: dict[str, dict[str, float]] = {}
-    for raw in portfolio.get("positions", []) or []:
+def _drawdown_from_high(values: list[float], n: int, end: int | None = None) -> float:
+    if end is None:
+        end = len(values) - 1
+    start = max(0, end - n + 1)
+    if start > end or end >= len(values):
+        return 0.0
+    high = max(values[start:end + 1])
+    return values[end] / high - 1.0 if high > 0.0 else 0.0
+
+
+def _clip(value: float, lo: float, hi: float) -> float:
+    return min(max(value, lo), hi)
+
+
+def _latest_stamp(market_state: dict[str, list[dict[str, Any]]]) -> str | None:
+    for ticker in ("QQQ", "SPY", "SMH"):
+        bars = market_state.get(ticker)
+        if bars:
+            return str(bars[-1].get("ts", len(bars)))
+    for bars in market_state.values():
+        if bars:
+            return str(bars[-1].get("ts", len(bars)))
+    return None
+
+
+def _price_map(
+    market_state: dict[str, list[dict[str, Any]]],
+    portfolio_state: dict[str, Any],
+) -> dict[str, float]:
+    prices: dict[str, float] = {}
+    for ticker, price in (portfolio_state.get("last_prices", {}) or {}).items():
         try:
-            ticker = str(raw.get("ticker", "")).upper()
+            p = float(price)
+        except (TypeError, ValueError):
+            continue
+        if p > 0.0:
+            prices[_clean_ticker(ticker)] = p
+    for ticker, bars in market_state.items():
+        clean = _clean_ticker(ticker)
+        if clean in prices:
+            continue
+        closes = _closes(bars)
+        if closes:
+            prices[clean] = closes[-1]
+    return prices
+
+
+def _positions(portfolio_state: dict[str, Any]) -> dict[str, dict[str, float]]:
+    out: dict[str, dict[str, float]] = {}
+    for raw in portfolio_state.get("positions", []) or []:
+        try:
+            ticker = _clean_ticker(raw.get("ticker"))
             qty = float(raw.get("quantity", 0.0))
             avg_cost = float(raw.get("avg_cost", 0.0))
         except (TypeError, ValueError):
             continue
-        if ticker and qty > 0:
-            old = out.get(ticker, {"quantity": 0.0, "avg_cost": avg_cost})
-            total = old["quantity"] + qty
-            out[ticker] = {
-                "quantity": total,
-                "avg_cost": ((old["avg_cost"] * old["quantity"]) + (avg_cost * qty)) / total if total > 0 else avg_cost,
-            }
+        if not ticker or qty <= 0.0:
+            continue
+        if ticker not in out:
+            out[ticker] = {"quantity": 0.0, "avg_cost": avg_cost}
+        prev_qty = out[ticker]["quantity"]
+        total_qty = prev_qty + qty
+        if total_qty > 0.0:
+            out[ticker]["avg_cost"] = (
+                (out[ticker]["avg_cost"] * prev_qty + avg_cost * qty) / total_qty
+            )
+        out[ticker]["quantity"] = total_qty
     return out
 
 
-def _price(ms: dict[str, list[dict[str, Any]]], ticker: str, last: dict[str, Any]) -> float | None:
-    values = _closes(ms, ticker)
-    if values:
-        return values[-1]
+def _equity(
+    portfolio_state: dict[str, Any],
+    cash: float,
+    prices: dict[str, float],
+) -> float:
     try:
-        p = float(last.get(ticker, 0.0))
-        return p if p > 0 else None
+        total = float(portfolio_state.get("cash", cash))
     except (TypeError, ValueError):
-        return None
-
-
-def _equity(ms: dict[str, list[dict[str, Any]]], portfolio: dict[str, Any], cash: float) -> float:
-    try:
-        total = float(portfolio.get("cash", cash))
-    except (TypeError, ValueError):
-        total = float(cash or 0.0)
-    last = portfolio.get("last_prices", {}) or {}
-    for ticker, pos in _positions(portfolio).items():
-        price = _price(ms, ticker, last) or pos["avg_cost"]
+        try:
+            total = float(cash)
+        except (TypeError, ValueError):
+            total = 0.0
+    for ticker, pos in _positions(portfolio_state).items():
+        price = prices.get(ticker, pos["avg_cost"])
         total += pos["quantity"] * max(price, 0.0)
-    return max(total, 0.0)
+    return max(total, 1e-9)
 
 
-def _latest_date(ms: dict[str, list[dict[str, Any]]]) -> str | None:
-    for ticker in ("SPY", "QQQ"):
-        rows = ms.get(ticker) or []
-        if rows:
-            return _date(rows[-1])
-    for rows in ms.values():
-        if rows:
-            return _date(rows[-1])
-    return None
+# ---- Walk-forward linear model ------------------------------------------------
 
-
-def _days_since(ms: dict[str, list[dict[str, Any]]], start: str | None) -> int | None:
-    if start is None:
+def _feature_vector(
+    closes: list[float],
+    bench: list[float],
+    idx: int,
+    bench_idx: int,
+) -> list[float] | None:
+    r5 = _ret(closes, 5, idx)
+    r10 = _ret(closes, 10, idx)
+    r21 = _ret(closes, 21, idx)
+    r63 = _ret(closes, 63, idx)
+    b21 = _ret(bench, 21, bench_idx)
+    sma20 = _sma(closes, 20, idx)
+    sma50 = _sma(closes, 50, idx)
+    vol20 = _ann_vol(closes, 20, idx)
+    if None in (r5, r10, r21, r63, b21, sma20, sma50, vol20):
         return None
-    rows = ms.get("SPY") or ms.get("QQQ") or []
-    dates = [_date(row) for row in rows]
-    if start not in dates:
+    assert r5 is not None and r10 is not None and r21 is not None and r63 is not None
+    assert b21 is not None and sma20 is not None and sma50 is not None and vol20 is not None
+    px = closes[idx]
+    gap20 = px / sma20 - 1.0
+    gap50 = px / sma50 - 1.0
+    dd20 = _drawdown_from_high(closes, 20, idx)
+    accel = r10 - (r21 / 2.0)
+    rel21 = r21 - b21
+    return [
+        1.0,
+        _clip(r5 / 0.060, -3.0, 3.0),
+        _clip(r10 / 0.090, -3.0, 3.0),
+        _clip(r21 / 0.140, -3.0, 3.0),
+        _clip(r63 / 0.300, -3.0, 3.0),
+        _clip(gap20 / 0.080, -3.0, 3.0),
+        _clip(gap50 / 0.160, -3.0, 3.0),
+        _clip(rel21 / 0.160, -3.0, 3.0),
+        _clip((0.32 - vol20) / 0.220, -3.0, 3.0),
+        _clip((accel - abs(dd20)) / 0.120, -3.0, 3.0),
+    ]
+
+
+def _train_linear_edge(
+    market_state: dict[str, list[dict[str, Any]]],
+    candidates: tuple[str, ...],
+) -> list[float]:
+    """Train a tiny SGD model on past feature -> next-5-day-return samples.
+
+    The model only uses samples whose targets are already inside the provided
+    history. It is deliberately low-capacity; the output is a small tie-breaker,
+    not the primary trading signal.
+    """
+    bench = _closes(market_state.get("QQQ")) or _closes(market_state.get("SPY"))
+    if len(bench) < MIN_BARS + ML_HORIZON:
+        return [0.0] * ML_FEATURES
+
+    weights = [0.0] * ML_FEATURES
+    lr = 0.010
+    l2 = 0.002
+    start_offset = -min(ML_TRAIN_DAYS, len(bench) - ML_HORIZON - 64)
+    if start_offset >= -ML_HORIZON - 8:
+        return weights
+
+    usable = [t for t in candidates if len(_closes(market_state.get(t))) >= MIN_BARS + ML_HORIZON]
+    for offset in range(start_offset, -ML_HORIZON, 2):
+        bench_idx = len(bench) + offset
+        for ticker in usable:
+            values = _closes(market_state.get(ticker))
+            idx = len(values) + offset
+            target_idx = idx + ML_HORIZON
+            if idx < 64 or target_idx >= len(values) or bench_idx < 64:
+                continue
+            x = _feature_vector(values, bench, idx, bench_idx)
+            if x is None:
+                continue
+            target = _clip((values[target_idx] / values[idx] - 1.0) / 0.080, -2.5, 2.5)
+            pred = sum(w * v for w, v in zip(weights, x))
+            err = target - pred
+            for i, v in enumerate(x):
+                weights[i] = weights[i] * (1.0 - lr * l2) + lr * err * v
+    return [_clip(w, -0.40, 0.40) for w in weights]
+
+
+def _ml_prediction(
+    values: list[float],
+    bench: list[float],
+    weights: list[float],
+) -> float:
+    if len(values) < MIN_BARS or len(bench) < MIN_BARS:
+        return 0.0
+    x = _feature_vector(values, bench, len(values) - 1, len(bench) - 1)
+    if x is None:
+        return 0.0
+    return _clip(sum(w * v for w, v in zip(weights, x)), -2.0, 2.0)
+
+
+# ---- Regime, ranking, and weights -------------------------------------------
+
+def _risk_regime(market_state: dict[str, list[dict[str, Any]]]) -> str:
+    qqq = _closes(market_state.get("QQQ"))
+    spy = _closes(market_state.get("SPY"))
+    smh = _closes(market_state.get("SMH"))
+    if len(qqq) < 55 or len(spy) < 55:
+        return "hard"
+
+    q_r3 = _ret(qqq, 3) or 0.0
+    q_r5 = _ret(qqq, 5) or 0.0
+    q_r10 = _ret(qqq, 10) or 0.0
+    q_vol10 = _ann_vol(qqq, 10) or 0.20
+    q_vol20 = _ann_vol(qqq, 20) or 0.20
+    q_sma20 = _sma(qqq, 20)
+    q_sma50 = _sma(qqq, 50)
+    s_sma50 = _sma(spy, 50)
+    smh_sma50 = _sma(smh, 50) if len(smh) >= 50 else None
+
+    if q_r3 < HARD_BRAKE_3D or q_r5 < HARD_BRAKE_5D or q_vol10 > HARD_BRAKE_VOL10:
+        return "hard"
+    if q_sma20 is None or q_sma50 is None or s_sma50 is None:
+        return "defensive"
+
+    spy_ok = spy[-1] > s_sma50 * 0.995
+    qqq_ok = qqq[-1] > q_sma50 * 0.995
+    qqq_fast = qqq[-1] > q_sma20 and q_sma20 > q_sma50
+    smh_ok = bool(smh and smh_sma50 and smh[-1] > smh_sma50 * 0.990)
+
+    if spy_ok and qqq_ok and qqq_fast and smh_ok and q_vol20 < VOL_FULL_MAX:
+        return "full"
+    if (qqq_ok or (qqq[-1] > q_sma20 and q_r10 > 0.020)) and q_vol20 < VOL_NEUTRAL_MAX:
+        return "neutral"
+    if qqq[-1] > q_sma20 and q_r10 > 0.0:
+        return "soft"
+    return "defensive"
+
+
+def _score_name(
+    ticker: str,
+    market_state: dict[str, list[dict[str, Any]]],
+    bench: list[float],
+    ml_weights: list[float],
+    defensive: bool = False,
+) -> tuple[float, float] | None:
+    values = _closes(market_state.get(ticker))
+    if len(values) < MIN_BARS:
         return None
-    return len(dates) - dates.index(start) - 1
-
-
-def _regime(ms: dict[str, list[dict[str, Any]]]) -> tuple[str, bool]:
-    spy = _closes(ms, "SPY")
-    qqq = _closes(ms, "QQQ")
-    if len(spy) < 55 or len(qqq) < 55:
-        return "CASH", False
-
-    spy20, spy50 = _sma(spy, 20), _sma(spy, 50)
-    qqq20, qqq50 = _sma(qqq, 20), _sma(qqq, 50)
-    qv20, qv10 = _vol(qqq, 20), _vol(qqq, 10)
-    r3, r5 = _ret(qqq, 3), _ret(qqq, 5)
-    if (
-        (r3 is not None and r3 < -0.050)
-        or (r5 is not None and r5 < -0.070)
-        or (qv10 is not None and qv10 > 0.58)
-        or (spy50 is not None and spy[-1] < spy50 * 0.990)
-        or (qqq50 is not None and qqq[-1] < qqq50 * 0.990)
-    ):
-        return "CASH", False
-    if None in (spy20, spy50, qqq20, qqq50, qv20):
-        return "NEUTRAL", False
-
-    full = (
-        spy[-1] > spy20
-        and qqq[-1] > qqq20
-        and spy[-1] > spy50 * 1.002
-        and qqq[-1] > qqq50 * 1.002
-        and qv20 < 0.38
-    )
-    calm = full and qv20 < 0.27 and (_ret(qqq, 10) or 0.0) > 0.0
-    return ("FULL" if full else "NEUTRAL"), calm
-
-
-def _score(ms: dict[str, list[dict[str, Any]]], ticker: str) -> tuple[float, float] | None:
-    values = _closes(ms, ticker)
-    if len(values) < 55:
+    price = values[-1]
+    if price < 5.0:
         return None
-    r3 = _ret(values, 3)
-    r5 = _ret(values, 5)
+
     r10 = _ret(values, 10)
     r21 = _ret(values, 21)
-    r42 = _ret(values, 42)
-    s10 = _sma(values, 10)
-    s20 = _sma(values, 20)
-    s50 = _sma(values, 50)
-    vol20 = _vol(values, 20)
-    if None in (r3, r5, r10, r21, r42, s10, s20, s50, vol20):
+    r63 = _ret(values, 63)
+    sma20 = _sma(values, 20)
+    sma50 = _sma(values, 50)
+    vol20 = _ann_vol(values, 20)
+    bench21 = _ret(bench, 21) if bench else 0.0
+    if None in (r10, r21, r63, sma20, sma50, vol20):
         return None
-    if values[-1] <= s10 or values[-1] <= s20 or values[-1] <= s50:
+    assert r10 is not None and r21 is not None and r63 is not None
+    assert sma20 is not None and sma50 is not None and vol20 is not None
+
+    trend_gap = price / sma50 - 1.0
+    fast_gap = price / sma20 - 1.0
+    rel21 = r21 - (bench21 or 0.0)
+    dd20 = abs(_drawdown_from_high(values, 20))
+    ml_edge = _ml_prediction(values, bench, ml_weights)
+
+    if defensive:
+        score = (
+            0.36 * r63 + 0.22 * r21 + 0.12 * r10
+            + 0.12 * trend_gap + 0.08 * fast_gap
+            - 0.10 * vol20 - 0.08 * dd20
+        )
+        return (score, vol20) if score > -0.015 and price > sma20 * 0.970 else None
+
+    # Momentum is the base signal; the model and theme prior are small nudges.
+    score = (
+        0.38 * r63 + 0.23 * r21 + 0.17 * r10
+        + 0.12 * trend_gap + 0.07 * rel21
+        - 0.11 * vol20 - 0.08 * dd20
+        + 0.020 * ml_edge
+        + THEME_PRIOR.get(ticker, 0.0)
+    )
+
+    trend_ok = price > sma20 and (price > sma50 or r10 > 0.035)
+    if not trend_ok or score <= 0.0:
         return None
-    if r5 <= 0 or r10 <= 0:
-        return None
-    gap = values[-1] / s50 - 1.0
-    if gap > 0.45 or vol20 > 1.15:
-        return None
-    raw = 0.24 * r3 + 0.32 * r5 + 0.24 * r10 + 0.14 * r21 + 0.06 * r42 + 0.04 * gap
-    score = raw / max(vol20, 0.08)
-    return (score, vol20) if score > 0 else None
+    return score, vol20
 
 
-def _leader_targets(ms: dict[str, list[dict[str, Any]]], gross: float) -> dict[str, float]:
-    scored = []
-    for ticker in THEME:
-        out = _score(ms, ticker)
-        if out:
-            score, vol = out
-            scored.append((score, vol, ticker))
-    scored.sort(reverse=True)
-    selected = scored[:TOP_N]
-    if not selected:
+def _ranked(
+    market_state: dict[str, list[dict[str, Any]]],
+    candidates: tuple[str, ...],
+    defensive: bool = False,
+) -> list[tuple[float, str, float]]:
+    bench = _closes(market_state.get("QQQ")) or _closes(market_state.get("SPY"))
+    ml_weights = _train_linear_edge(market_state, candidates) if not defensive else [0.0] * ML_FEATURES
+    ranked: list[tuple[float, str, float]] = []
+    for ticker in candidates:
+        if ticker not in market_state:
+            continue
+        scored = _score_name(ticker, market_state, bench, ml_weights, defensive)
+        if scored is None:
+            continue
+        score, vol = scored
+        ranked.append((score, ticker, vol))
+    ranked.sort(key=lambda item: (item[0], THEME_PRIOR.get(item[1], 0.0), item[1]), reverse=True)
+    return ranked
+
+
+def _portfolio_drawdown_scale(equity: float) -> float:
+    global _peak_equity
+    _peak_equity = max(_peak_equity, equity)
+    if _peak_equity <= 0.0:
+        return 1.0
+    dd = 1.0 - equity / _peak_equity
+    if dd >= 0.10:
+        return 0.25
+    if dd >= 0.07:
+        return 0.45
+    if dd >= 0.04:
+        return 0.72
+    return 1.0
+
+
+def _vol_budget(market_state: dict[str, list[dict[str, Any]]], base_budget: float) -> float:
+    qqq = _closes(market_state.get("QQQ"))
+    q_vol = _ann_vol(qqq, 20) if qqq else None
+    if not q_vol or q_vol <= 0.0:
+        return base_budget
+    scale = _clip(TARGET_VOL / q_vol, 0.45, 1.05)
+    return min(base_budget, base_budget * scale)
+
+
+def _allocate(
+    ranked: list[tuple[float, str, float]],
+    budget: float,
+    top_n: int,
+) -> dict[str, float]:
+    selected = ranked[:top_n]
+    if not selected or budget <= 0.0:
         return {}
 
-    # Rank-linear base, then slight inverse-vol adjustment. This keeps the book
-    # concentrated in true leaders without letting one ultra-low-vol name dominate.
-    n = len(selected)
-    denom = n * (n + 1) / 2.0
-    weights = {}
-    for rank, (_score_v, vol, ticker) in enumerate(selected, start=1):
-        rank_weight = (n - rank + 1) / denom
-        vol_adj = min(1.25, max(0.75, 0.34 / max(vol, 0.08)))
-        weights[ticker] = min(NAME_CAP, gross * rank_weight * vol_adj)
+    raw: dict[str, float] = {}
+    for score, ticker, vol in selected:
+        risk = max(vol, 0.16)
+        raw[ticker] = max(score, 0.010) / (risk ** 0.70)
 
-    total = sum(weights.values())
-    if total > gross and total > 0:
-        scale = gross / total
-        weights = {ticker: weight * scale for ticker, weight in weights.items()}
-    return {ticker: round(weight, 6) for ticker, weight in weights.items() if weight > 0.004}
-
-
-def _def_targets(ms: dict[str, list[dict[str, Any]]], gross: float) -> dict[str, float]:
-    names = []
-    for ticker in DEFENSIVE:
-        values = _closes(ms, ticker)
-        s50 = _sma(values, 50)
-        if values and s50 and values[-1] > s50 * 0.985:
-            names.append(ticker)
-    if not names:
-        return {}
-    per = min(0.11, gross / len(names))
-    return {ticker: per for ticker in names}
+    weights: dict[str, float] = {}
+    remaining_budget = budget
+    remaining = dict(raw)
+    for _ in range(8):
+        total_raw = sum(remaining.values())
+        if total_raw <= 0.0 or remaining_budget <= 0.0:
+            break
+        changed = False
+        for ticker, raw_weight in list(remaining.items()):
+            proposed = remaining_budget * raw_weight / total_raw
+            if proposed > MAX_WEIGHT:
+                weights[ticker] = MAX_WEIGHT
+                remaining_budget -= MAX_WEIGHT
+                del remaining[ticker]
+                changed = True
+        if not changed:
+            for ticker, raw_weight in remaining.items():
+                weights[ticker] = remaining_budget * raw_weight / total_raw
+            break
+    return {t: round(w, 6) for t, w in weights.items() if w > 0.002}
 
 
-def _targets(ms: dict[str, list[dict[str, Any]]], state: str, calm: bool, dd_scale: float) -> dict[str, float]:
-    if state == "CASH":
-        return _def_targets(ms, DEF_GROSS * 0.55 * dd_scale)
-
-    gross = (CORE_FULL if state == "FULL" else CORE_NEUTRAL) * dd_scale
-    weights = _leader_targets(ms, gross)
-    if not weights:
-        return _def_targets(ms, DEF_GROSS * dd_scale)
-
-    if state == "FULL" and calm and all(_closes(ms, ticker) for ticker in OVERLAY):
-        weights["QLD"] = min(OVERLAY_CAP, 0.060 * dd_scale)
-        weights["SSO"] = min(OVERLAY_CAP, 0.045 * dd_scale)
-
-    beta_gross = sum(weight * BETA.get(ticker, 1.0) for ticker, weight in weights.items())
-    if beta_gross > MAX_BETA_GROSS and beta_gross > 0:
+def _scale_beta(weights: dict[str, float]) -> dict[str, float]:
+    clipped = {t: min(max(w, 0.0), MAX_WEIGHT) for t, w in weights.items() if w > 0.001}
+    beta_gross = sum(w * BETA_MULTIPLE.get(t, 1.0) for t, w in clipped.items())
+    if beta_gross > MAX_BETA_GROSS:
         scale = MAX_BETA_GROSS / beta_gross
-        weights = {ticker: weight * scale for ticker, weight in weights.items()}
-    return {ticker: round(weight, 6) for ticker, weight in weights.items() if weight > 0.004}
+        clipped = {t: w * scale for t, w in clipped.items()}
+    return {t: round(w, 6) for t, w in clipped.items() if w > 0.002}
 
 
-def _stops(ms: dict[str, list[dict[str, Any]]], positions: dict[str, dict[str, float]], last: dict[str, Any]) -> list[dict[str, object]]:
-    global _highs
+def _overlay_ok(market_state: dict[str, list[dict[str, Any]]]) -> bool:
+    qqq = _closes(market_state.get("QQQ"))
+    smh = _closes(market_state.get("SMH"))
+    if len(qqq) < 55 or not market_state.get("QLD") or not market_state.get("SSO"):
+        return False
+    q20 = _sma(qqq, 20)
+    q50 = _sma(qqq, 50)
+    qv20 = _ann_vol(qqq, 20) or 1.0
+    r10 = _ret(qqq, 10) or 0.0
+    smh_ok = True
+    if len(smh) >= 50:
+        smh50 = _sma(smh, 50)
+        smh_ok = bool(smh50 and smh[-1] > smh50 and (_ret(smh, 10) or 0.0) > 0.0)
+    return bool(q20 and q50 and q20 > q50 and qqq[-1] > q20 and r10 > 0.015 and qv20 < 0.30 and smh_ok)
 
-    orders = []
-    for ticker in list(_highs):
-        if ticker not in positions:
-            del _highs[ticker]
+
+def target_weights(
+    market_state: dict[str, list[dict[str, Any]]],
+    total_equity: float = 100_000.0,
+) -> dict[str, float]:
+    """Compute target portfolio weights from historical bars only."""
+    global _last_regime, _stress_cooldown
+
+    regime = _risk_regime(market_state)
+    if regime == "hard":
+        _stress_cooldown = 2
+    elif _stress_cooldown > 0:
+        _stress_cooldown -= 1
+        if regime == "full":
+            regime = "neutral"
+
+    dd_scale = _portfolio_drawdown_scale(total_equity)
+    _last_regime = regime
+
+    if regime == "hard":
+        ranked_def = _ranked(market_state, DEFENSIVE, defensive=True)
+        return _scale_beta(_allocate(ranked_def, 0.12, 2))
+
+    if regime == "defensive":
+        ranked_def = _ranked(market_state, DEFENSIVE, defensive=True)
+        return _scale_beta(_allocate(ranked_def, 0.34 * dd_scale, 3))
+
+    if regime == "soft":
+        ranked = _ranked(market_state, tuple(dict.fromkeys(DEFENSIVE + BROAD_RISK + AI_POWER)), defensive=False)
+        return _scale_beta(_allocate(ranked, _vol_budget(market_state, 0.46) * dd_scale, 4))
+
+    ranked = _ranked(market_state, RISK_CANDIDATES, defensive=False)
+    if not ranked:
+        ranked_def = _ranked(market_state, DEFENSIVE, defensive=True)
+        return _scale_beta(_allocate(ranked_def, 0.25 * dd_scale, 3))
+
+    base_budget = 0.98 if regime == "full" else 0.78
+    budget = _vol_budget(market_state, base_budget) * dd_scale
+    weights: dict[str, float] = {}
+    overlay = regime == "full" and dd_scale > 0.99 and _overlay_ok(market_state)
+    if overlay:
+        overlay_weights = {"QLD": 0.10, "SSO": 0.05}
+        weights.update(overlay_weights)
+        budget = max(0.0, budget - sum(overlay_weights.values()))
+
+    top_n = 5 if regime == "full" else 4
+    weights.update(_allocate(ranked, budget, top_n))
+    return _scale_beta(weights)
+
+
+# ---- Order generation ---------------------------------------------------------
+
+def _needs_rebalance(
+    positions: dict[str, dict[str, float]],
+    prices: dict[str, float],
+    targets: dict[str, float],
+    equity: float,
+    regime: str,
+    regime_changed: bool,
+) -> bool:
+    if not positions and targets:
+        return True
+    if regime_changed or regime in {"hard", "defensive"}:
+        return True
+    if _tick_count - _last_rebalance_tick >= REBALANCE_EVERY_BARS:
+        return True
     for ticker, pos in positions.items():
-        price = _price(ms, ticker, last)
-        if price is None:
+        price = prices.get(ticker)
+        if not price or equity <= 0.0:
             continue
-        high = max(_highs.get(ticker, price), price)
-        _highs[ticker] = high
-        if price < high * (1.0 - TRAIL_STOP):
-            orders.append({"ticker": ticker, "side": "sell", "quantity": pos["quantity"]})
-            del _highs[ticker]
-    return orders
+        weight = pos["quantity"] * price / equity
+        if ticker not in targets and weight > 0.004:
+            return True
+        if weight > DRIFT_LIMIT:
+            return True
+        if ticker in targets and abs(weight - targets[ticker]) > 0.045:
+            return True
+    for ticker, target in targets.items():
+        price = prices.get(ticker)
+        if price and abs(target - (positions.get(ticker, {}).get("quantity", 0.0) * price / equity)) > 0.045:
+            return True
+    return False
 
 
-def _orders(ms, targets, positions, equity, cash, stop_orders):
-    last: dict[str, Any] = {}
-    orders = list(stop_orders)
-    stopped = {order["ticker"] for order in stop_orders}
-    proceeds = 0.0
-    min_trade = equity * MIN_TRADE_PCT
-
-    for ticker in sorted(positions):
-        if ticker in stopped:
-            continue
-        price = _price(ms, ticker, last)
-        if not price:
-            continue
-        qty = positions[ticker]["quantity"]
-        current = qty * price
-        target = equity * targets.get(ticker, 0.0)
-        if ticker not in targets:
-            orders.append({"ticker": ticker, "side": "sell", "quantity": qty})
-            proceeds += current
-        elif current - target > min_trade:
-            sell_qty = min(floor((current - target) / price), floor(qty))
-            if sell_qty > 0:
-                orders.append({"ticker": ticker, "side": "sell", "quantity": float(sell_qty)})
-                proceeds += sell_qty * price
-
-    spendable = max(float(cash or 0.0), 0.0) + proceeds * 0.98
-    for ticker in sorted(targets, key=lambda key: (-targets[key], key)):
-        price = _price(ms, ticker, last)
-        if not price:
-            continue
-        held = positions.get(ticker, {}).get("quantity", 0.0)
-        target_qty = floor(equity * targets[ticker] / price)
-        delta = target_qty - held
-        if delta > 0 and delta * price > min_trade:
-            buy_qty = floor(min(delta * price, spendable) / price)
-            if buy_qty > 0:
-                orders.append({"ticker": ticker, "side": "buy", "quantity": float(buy_qty)})
-                spendable -= buy_qty * price
-
-    sells = [order for order in orders if order["side"] == "sell"]
-    buys = [order for order in orders if order["side"] == "buy"]
-    return (sells + buys)[:45]
-
-
-def decide(market_state: dict, portfolio_state: dict, cash: float) -> list[dict]:
-    global _last_rebalance_date, _peak_equity
-
-    try:
-        ms = market_state or {}
-        today = _latest_date(ms)
-        if today is None:
-            return []
-
-        portfolio = portfolio_state or {}
-        equity = _equity(ms, portfolio, cash)
-        if equity <= 0:
-            return []
-        _peak_equity = max(_peak_equity, equity)
-        drawdown = equity / _peak_equity - 1.0 if _peak_equity > 0 else 0.0
-        dd_scale = 0.25 if drawdown <= -0.090 else 0.50 if drawdown <= -0.050 else 1.0
-
-        positions = _positions(portfolio)
-        state, calm = _regime(ms)
-        stops = _stops(ms, positions, portfolio.get("last_prices", {}) or {})
-        days = _days_since(ms, _last_rebalance_date)
-        scheduled = _last_rebalance_date is None or days is None or days >= REBALANCE_DAYS
-        derisk = state == "CASH" and bool(positions)
-        if not scheduled and not derisk and not stops:
-            return []
-
-        targets = _targets(ms, state, calm, dd_scale) if scheduled or derisk else {}
-        orders = _orders(ms, targets, positions, equity, cash, stops)
-        if orders and (scheduled or derisk):
-            _last_rebalance_date = today
-        return orders
-    except Exception:
+def _orders_to_targets(
+    targets: dict[str, float],
+    positions: dict[str, dict[str, float]],
+    equity: float,
+    prices: dict[str, float],
+    cash_available: float,
+) -> list[dict[str, object]]:
+    if equity <= 0.0:
         return []
+
+    min_trade = max(25.0, equity * MIN_TRADE_PCT)
+    orders: list[dict[str, object]] = []
+    expected_cash = max(float(cash_available or 0.0), 0.0)
+
+    # Sells first so buys have realistic cash behind them.
+    for ticker in sorted(positions):
+        pos = positions[ticker]
+        price = prices.get(ticker)
+        if not price or price <= 0.0:
+            continue
+        current_value = pos["quantity"] * price
+        target_value = equity * targets.get(ticker, 0.0)
+        delta = target_value - current_value
+        if ticker not in targets:
+            if pos["quantity"] > 0.0:
+                orders.append({"ticker": ticker, "side": "sell", "quantity": round(pos["quantity"], 4)})
+                expected_cash += current_value * 0.998
+        elif delta < -min_trade:
+            sell_qty = min(pos["quantity"], abs(delta) / price)
+            if sell_qty > 0.0001:
+                orders.append({"ticker": ticker, "side": "sell", "quantity": round(sell_qty, 4)})
+                expected_cash += sell_qty * price * 0.998
+
+    # Buys second, largest target gaps first.
+    buy_plan: list[tuple[float, str, float]] = []
+    for ticker, weight in targets.items():
+        price = prices.get(ticker)
+        if not price or price <= 0.0:
+            continue
+        current_qty = positions.get(ticker, {}).get("quantity", 0.0)
+        current_value = current_qty * price
+        target_value = equity * weight
+        delta = target_value - current_value
+        if delta > min_trade:
+            buy_plan.append((delta, ticker, price))
+    buy_plan.sort(reverse=True)
+
+    for delta, ticker, price in buy_plan:
+        buy_value = min(delta, expected_cash * 0.985)
+        qty = buy_value / price
+        if qty > 0.0001 and buy_value >= min_trade:
+            orders.append({"ticker": ticker, "side": "buy", "quantity": round(qty, 4)})
+            expected_cash -= buy_value
+        if len(orders) >= MAX_ORDERS:
+            break
+    return orders[:MAX_ORDERS]
+
+
+def decide(
+    market_state: dict[str, list[dict[str, Any]]],
+    portfolio_state: dict[str, Any],
+    cash: float,
+) -> list[dict[str, object]]:
+    """Return long-only orders for the next fill."""
+    global _tick_count, _last_seen_stamp, _last_rebalance_tick, _last_targets
+
+    if not market_state:
+        return []
+    stamp = _latest_stamp(market_state)
+    if stamp is None:
+        return []
+    if stamp == _last_seen_stamp:
+        return []
+    _last_seen_stamp = stamp
+    _tick_count += 1
+
+    prices = _price_map(market_state, portfolio_state)
+    positions = _positions(portfolio_state)
+    total_equity = _equity(portfolio_state, cash, prices)
+    regime_before = _last_regime or "unknown"
+    targets = target_weights(market_state, total_equity)
+    regime_now = _last_regime or regime_before
+    regime_changed = regime_before != "unknown" and regime_now != regime_before
+
+    if not targets and not positions:
+        return []
+
+    if not _needs_rebalance(positions, prices, targets, total_equity, regime_now, regime_changed):
+        return []
+
+    orders = _orders_to_targets(targets, positions, total_equity, prices, float(portfolio_state.get("cash", cash) or 0.0))
+    if orders:
+        _last_rebalance_tick = _tick_count
+        _last_targets = targets
+    return orders

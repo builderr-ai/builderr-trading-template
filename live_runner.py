@@ -89,6 +89,7 @@ FIELD = [
     ("yuva_agent.py",                "yuva",                   "round 1 · entrant"),
     ("shivkumar_agent.py",           "shivkumar",              "round 1 · entrant"),
     ("sham_agent.py",                "sham",                   "round 1 · entrant"),
+    ("rishchith_agent.py",           "rishchith",              "round 1 · entrant"),
 ]
 
 # Private entrants (read-only deploy-key path). Their CODE never enters this
@@ -120,7 +121,7 @@ ENTRY = {
     "ai-momentum-basket": "2026-06-01", "sector-rotation": "2026-06-01", "vol-target": "2026-06-01",
     "opu": "2026-06-02", "robert": "2026-06-02", "mohit": "2026-06-03",
     "zaid": "2026-06-04", "sumegh": "2026-06-04", "shyam": "2026-06-06",
-    "harsimran": "2026-06-19", "sankeerth": "2026-06-18", "siddu": "2026-06-07",
+    "harsimran": "2026-06-19", "sankeerth": "2026-06-23", "siddu": "2026-06-07",
     "rohit": "2026-06-08", "eshwar": "2026-06-08", "arnav": "2026-06-09",
     "nagarjuna": "2026-06-09", "balaji": "2026-06-10", "ajai": "2026-06-11",
     "aksham": "2026-06-11", "darshan": "2026-06-19", "tanishq": "2026-06-11",
@@ -128,7 +129,7 @@ ENTRY = {
     "rohan": "2026-06-15", "dev": "2026-06-19", "deepika": "2026-06-15",
     "om": "2026-06-17", "raam": "2026-06-17",
     "navika": "2026-06-18", "yuva": "2026-06-18", "shivkumar": "2026-06-17",
-    "sham": "2026-06-19",
+    "sham": "2026-06-19", "rishchith": "2026-06-20",
 }
 CHART_START = "2026-06-01"   # common x-axis for the illustrative race chart (Round 1 open)
 SLIP_EQUITY = 0.0005
