@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-06-25T21:44:32Z",
+  "generated_at_utc": "2026-06-26T13:16:17Z",
   "as_of_market_date": "2026-06-25",
   "round_start": "2026-06-02",
   "start_cash": 100000.0,
@@ -380,7 +380,7 @@
       100707.69,
       98331.4,
       98129.69,
-      99381.24
+      99371.68
     ],
     [
       100000.0,
@@ -722,7 +722,7 @@
       100000.0,
       100000.0,
       100000.0,
-      100274.55
+      99979.98
     ],
     [
       100000.0,
@@ -741,7 +741,26 @@
       100000.0,
       100000.0,
       100000.0,
-      99462.41
+      99589.02
+    ],
+    [
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      100000.0,
+      98280.6
     ]
   ],
   "note": "Each line is a strategy's current version replayed over the round on real daily bars, no peeking at the future. Names are hidden on purpose; lines are grouped by trading style. The board is the snapshot; this is the time series behind it."
