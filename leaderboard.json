@@ -1,10 +1,10 @@
 {
-  "generated_at_utc": "2026-06-26T21:18:58Z",
+  "generated_at_utc": "2026-06-28T15:44:45Z",
   "as_of_market_date": "2026-06-26",
   "round_start": "2026-06-02",
   "scoring": "forward-only",
   "start_cash": 100000.0,
-  "note": "Live Round 1 \u2014 forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there \u2014 so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is the best risk-adjusted result (Calmar) over its live window \u2014 there is no historical re-run, because in trading all past data is public and fittable, so the forward window is the only real out-of-sample test. Submissions close ~3 days before the round ends, so every bot gets a minimum live window.",
+  "note": "Live Round 1 \u2014 forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there \u2014 so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is the best return over its live window \u2014 admission already screens out the reckless bots (it caps how much of the $100k goes into the market at once and into any single stock), and the live window includes real market moves, so return over it is a genuine test, not a lucky calm run. There is no historical re-run, because in trading all past data is public and fittable, so the forward window is the only real out-of-sample test. Submissions close ~3 days before the round ends, so every bot gets a minimum live window.",
   "bots": [
     {
       "name": "arnav",
@@ -121,17 +121,17 @@
     {
       "name": "meet",
       "label": "round 1 \u00b7 entrant",
-      "equity": 100581.83,
-      "pnl": 581.83,
-      "ret": 0.0058,
+      "equity": 100631.08,
+      "pnl": 631.08,
+      "ret": 0.0063,
       "trades": 6,
       "days": 2,
       "since": "2026-06-24",
-      "cash": 48946.87,
+      "cash": 48543.6,
       "holdings": [
         {
-          "t": "DD",
-          "q": 4.0
+          "t": "HON",
+          "q": 2.0
         },
         {
           "t": "BSX",
@@ -143,7 +143,7 @@
         },
         {
           "t": "FLS",
-          "q": 111.0
+          "q": 112.0
         },
         {
           "t": "MRNA",
@@ -158,13 +158,13 @@
     {
       "name": "harsimran",
       "label": "round 1 \u00b7 entrant",
-      "equity": 100444.25,
-      "pnl": 444.25,
-      "ret": 0.0044,
+      "equity": 100445.55,
+      "pnl": 445.55,
+      "ret": 0.0045,
       "trades": 9,
       "days": 5,
       "since": "2026-06-19",
-      "cash": 63081.7,
+      "cash": 63083.0,
       "holdings": [
         {
           "t": "XLP",
@@ -189,25 +189,15 @@
       ]
     },
     {
-      "name": "eshwar",
-      "label": "round 1 \u00b7 entrant",
-      "equity": 100434.32,
-      "pnl": 434.32,
-      "ret": 0.0043,
-      "trades": 9,
-      "days": 8,
-      "since": "2026-06-08"
-    },
-    {
       "name": "ajai",
       "label": "round 1 \u00b7 entrant",
-      "equity": 100228.37,
-      "pnl": 228.37,
+      "equity": 100229.83,
+      "pnl": 229.83,
       "ret": 0.0023,
       "trades": 5,
       "days": 1,
       "since": "2026-06-25",
-      "cash": 65397.15,
+      "cash": 65398.61,
       "holdings": [
         {
           "t": "GLD",
@@ -328,13 +318,13 @@
     {
       "name": "om",
       "label": "round 1 \u00b7 entrant",
-      "equity": 99879.88,
-      "pnl": -120.12,
+      "equity": 99879.56,
+      "pnl": -120.44,
       "ret": -0.0012,
       "trades": 10,
       "days": 6,
       "since": "2026-06-17",
-      "cash": 52852.74,
+      "cash": 52852.42,
       "holdings": [
         {
           "t": "TLT",
@@ -406,13 +396,13 @@
     {
       "name": "vishwas",
       "label": "round 1 \u00b7 entrant",
-      "equity": 99683.38,
-      "pnl": -316.62,
-      "ret": -0.0032,
+      "equity": 99692.2,
+      "pnl": -307.8,
+      "ret": -0.0031,
       "trades": 4,
       "days": 1,
       "since": "2026-06-26",
-      "cash": 34353.76,
+      "cash": 34362.58,
       "holdings": [
         {
           "t": "AMD",
@@ -460,13 +450,13 @@
     {
       "name": "raam",
       "label": "round 1 \u00b7 entrant",
-      "equity": 99638.13,
-      "pnl": -361.87,
-      "ret": -0.0036,
+      "equity": 99634.78,
+      "pnl": -365.22,
+      "ret": -0.0037,
       "trades": 9,
       "days": 6,
       "since": "2026-06-17",
-      "cash": 8967.3,
+      "cash": 8963.95,
       "holdings": [
         {
           "t": "DIA",
@@ -526,13 +516,13 @@
     {
       "name": "balaji",
       "label": "round 1 \u00b7 entrant",
-      "equity": 99436.87,
-      "pnl": -563.13,
+      "equity": 99437.27,
+      "pnl": -562.73,
       "ret": -0.0056,
       "trades": 16,
       "days": 11,
       "since": "2026-06-10",
-      "cash": 57215.9,
+      "cash": 57216.3,
       "holdings": [
         {
           "t": "IWM",
@@ -650,13 +640,13 @@
     {
       "name": "sankeerth",
       "label": "round 1 \u00b7 entrant",
-      "equity": 98739.57,
-      "pnl": -1260.43,
+      "equity": 98739.54,
+      "pnl": -1260.46,
       "ret": -0.0126,
       "trades": 9,
       "days": 3,
       "since": "2026-06-23",
-      "cash": 45593.8,
+      "cash": 45593.77,
       "holdings": [
         {
           "t": "AMD",
@@ -754,6 +744,16 @@
           "q": 98.0
         }
       ]
+    },
+    {
+      "name": "eshwar",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 97976.85,
+      "pnl": -2023.15,
+      "ret": -0.0202,
+      "trades": 15,
+      "days": 13,
+      "since": "2026-06-08"
     },
     {
       "name": "dual-momentum-rotation",
@@ -989,13 +989,13 @@
     {
       "name": "opu",
       "label": "round 1 \u00b7 entrant",
-      "equity": 94456.48,
-      "pnl": -5543.52,
+      "equity": 94456.83,
+      "pnl": -5543.17,
       "ret": -0.0554,
       "trades": 8,
       "days": 17,
       "since": "2026-06-02",
-      "cash": 12502.57,
+      "cash": 12502.92,
       "holdings": [
         {
           "t": "SMH",

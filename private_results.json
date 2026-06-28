@@ -1,12 +1,12 @@
 {
   "eshwar": {
     "label": "round 1 \u00b7 entrant",
-    "equity": 100434.32,
-    "pnl": 434.32,
-    "ret": 0.0043,
-    "trades": 9,
-    "days": 8,
+    "equity": 97976.85,
+    "pnl": -2023.15,
+    "ret": -0.0202,
+    "trades": 15,
+    "days": 13,
     "since": "2026-06-08",
-    "as_of": "2026-06-18"
+    "as_of": "2026-06-26"
   }
 }
