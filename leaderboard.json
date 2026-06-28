@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-06-28T16:17:17Z",
+  "generated_at_utc": "2026-06-28T16:59:04Z",
   "as_of_market_date": "2026-06-26",
   "round_start": "2026-06-02",
   "scoring": "forward-only",
@@ -147,16 +147,6 @@
       "since": "2026-06-09"
     },
     {
-      "name": "vishwas",
-      "label": "round 1 \u00b7 entrant",
-      "equity": 99692.2,
-      "pnl": -307.8,
-      "ret": -0.0031,
-      "trades": 4,
-      "days": 1,
-      "since": "2026-06-26"
-    },
-    {
       "name": "aksham",
       "label": "round 1 \u00b7 entrant",
       "equity": 99663.93,
@@ -165,6 +155,16 @@
       "trades": 11,
       "days": 10,
       "since": "2026-06-11"
+    },
+    {
+      "name": "vishwas",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 99636.19,
+      "pnl": -363.81,
+      "ret": -0.0036,
+      "trades": 4,
+      "days": 1,
+      "since": "2026-06-27"
     },
     {
       "name": "raam",
