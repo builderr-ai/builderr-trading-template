@@ -54,7 +54,23 @@ FIELD = [
     ("ai_momentum.py",               "ai-momentum-basket",     "house · aggressive"),
     ("example_sector_rotation.py",   "sector-rotation",        "reference"),
     ("example_vol_target.py",        "vol-target",             "reference"),
-    # Real Round 1 entrants (NOT house bots) — scored on the same live window.
+    # NOTE: entrant bots are NOT in FIELD. Entrant code must NEVER live in this PUBLIC
+    # repo. Every Round 1 entrant is scored from the gitignored private_agents/ dir via
+    # PRIVATE_FIELD below; only their NUMBERS (+ equity curve) are ever published.
+]
+
+# Private entrants (read-only deploy-key path). Their CODE never enters this
+# PUBLIC repo. We score them locally from PRIVATE_DIR (gitignored) and publish
+# only their numbers, persisted in private_results.json — so the cron (which
+# can't see their code) keeps them on the board with their last-scored result.
+PRIVATE_DIR = HERE / "private_agents"
+PRIVATE_RESULTS = HERE / "private_results.json"
+PRIVATE_FIELD = [
+    ("eshwar_agent.py",              "eshwar",                 "round 1 · entrant"),
+    # ALL Round 1 entrants live here: their code sits ONLY in gitignored private_agents/,
+    # never in this public repo. Scored locally; published via private_results.json
+    # (numbers + equity curve only, never code). The cron keeps them on the board with
+    # their last locally-scored result.
     ("opu_agent.py",                 "opu",                    "round 1 · entrant"),
     ("robert_agent.py",              "robert",                 "round 1 · entrant"),
     ("mohit_agent.py",               "mohit",                  "round 1 · entrant"),
@@ -73,13 +89,10 @@ FIELD = [
     ("darshan_agent.py",             "darshan",                "round 1 · entrant"),
     ("tanishq_agent.py",             "tanishq",                "round 1 · entrant"),
     ("aarya_agent.py",               "aarya",                  "round 1 · entrant"),
-    # yog + krunal submitted the stock template strategy unmodified (allowed;
-    # told them) — identical code, so identical numbers until they iterate.
+    # yog + krunal submitted identical code — identical numbers until they iterate.
     ("yog_agent.py",                 "yog",                    "round 1 · entrant"),
     ("krunal_agent.py",              "krunal",                 "round 1 · entrant"),
-    # Rohan: regime bot with an optional external-LLM call that is INERT in the
-    # eval (no network/key) — it cleanly falls back to pure-Python logic, which
-    # is what we score. Told him.
+    # Rohan: optional external-LLM call is INERT in the eval; falls back to pure Python.
     ("rohan_agent.py",               "rohan",                  "round 1 · entrant"),
     ("dev_agent.py",                 "dev",                    "round 1 · entrant"),
     ("deepika_agent.py",             "deepika",                "round 1 · entrant"),
@@ -88,16 +101,10 @@ FIELD = [
     ("navika_agent.py",              "navika",                 "round 1 · entrant"),
     ("yuva_agent.py",                "yuva",                   "round 1 · entrant"),
     ("shivkumar_agent.py",           "shivkumar",              "round 1 · entrant"),
-]
-
-# Private entrants (read-only deploy-key path). Their CODE never enters this
-# PUBLIC repo. We score them locally from PRIVATE_DIR (gitignored) and publish
-# only their numbers, persisted in private_results.json — so the cron (which
-# can't see their code) keeps them on the board with their last-scored result.
-PRIVATE_DIR = HERE / "private_agents"
-PRIVATE_RESULTS = HERE / "private_results.json"
-PRIVATE_FIELD = [
-    ("eshwar_agent.py",              "eshwar",                 "round 1 · entrant"),
+    ("sham_agent.py",                "sham",                   "round 1 · entrant"),
+    ("rishchith_agent.py",           "rishchith",              "round 1 · entrant"),
+    ("meet_agent.py",                "meet",                   "round 1 · entrant"),
+    ("vishwas_agent.py",             "vishwas",                "round 1 · entrant"),
 ]
 
 EVAL_DAYS = 60       # (history sizing only) trailing window used when fetching bars
@@ -119,14 +126,15 @@ ENTRY = {
     "ai-momentum-basket": "2026-06-01", "sector-rotation": "2026-06-01", "vol-target": "2026-06-01",
     "opu": "2026-06-02", "robert": "2026-06-02", "mohit": "2026-06-03",
     "zaid": "2026-06-04", "sumegh": "2026-06-04", "shyam": "2026-06-06",
-    "harsimran": "2026-06-19", "sankeerth": "2026-06-18", "siddu": "2026-06-07",
+    "harsimran": "2026-06-19", "sankeerth": "2026-06-23", "siddu": "2026-06-07",
     "rohit": "2026-06-08", "eshwar": "2026-06-08", "arnav": "2026-06-09",
-    "nagarjuna": "2026-06-09", "balaji": "2026-06-10", "ajai": "2026-06-11",
+    "nagarjuna": "2026-06-09", "balaji": "2026-06-10", "ajai": "2026-06-25",
     "aksham": "2026-06-11", "darshan": "2026-06-19", "tanishq": "2026-06-11",
     "aarya": "2026-06-12", "yog": "2026-06-13", "krunal": "2026-06-13",
     "rohan": "2026-06-15", "dev": "2026-06-19", "deepika": "2026-06-15",
     "om": "2026-06-17", "raam": "2026-06-17",
     "navika": "2026-06-18", "yuva": "2026-06-18", "shivkumar": "2026-06-17",
+    "sham": "2026-06-24", "rishchith": "2026-06-26", "meet": "2026-06-24", "vishwas": "2026-06-27",
 }
 CHART_START = "2026-06-01"   # common x-axis for the illustrative race chart (Round 1 open)
 SLIP_EQUITY = 0.0005
@@ -357,9 +365,11 @@ def main() -> int:
         if p.exists():
             try:
                 m = run_bot(load_decide_from(p), bars, entry)
+                aligned = [START_CASH] * max(0, len(chart_dates) - len(m["curve"])) + m["curve"]
                 saved[name] = {"label": label, "equity": m["equity"], "pnl": m["pnl"],
                                "ret": round(m["ret"], 4), "trades": m["trades"],
-                               "days": m["days"], "since": entry, "as_of": asof}
+                               "days": m["days"], "since": entry, "as_of": asof,
+                               "curve": aligned}
                 print(f"  {name:24s} (private) ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  {m['days']}d  Trades={m['trades']}")
             except Exception as e:  # noqa: BLE001
                 print(f"skip private {filename}: {e!r}")
@@ -368,6 +378,8 @@ def main() -> int:
             rows.append({"name": name, "label": rec["label"], "equity": rec["equity"],
                          "pnl": rec["pnl"], "ret": rec["ret"], "trades": rec["trades"],
                          "days": rec.get("days"), "since": rec.get("since")})
+            if rec.get("curve"):
+                curves[name] = rec["curve"]   # numbers only — keeps the race chart intact
     if saved:
         PRIVATE_RESULTS.write_text(json.dumps(saved, indent=2))
 
@@ -378,7 +390,7 @@ def main() -> int:
         "round_start": ROUND_START,
         "scoring": "forward-only",
         "start_cash": START_CASH,
-        "note": "Live Round 1 — forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there — so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is the best risk-adjusted result (Calmar) over its live window — there is no historical re-run, because in trading all past data is public and fittable, so the forward window is the only real out-of-sample test. Submissions close ~3 days before the round ends, so every bot gets a minimum live window.",
+        "note": "Live Round 1 — forward-only scoring. Each agent starts a $100,000 paper account at the first market open AFTER it was submitted, and is scored only from there — so no one can optimise against market history they had already seen, and submitting later gives no edge. 'days' is each bot's live window so far. Same data and fills for everyone, refreshed each market day. The winner is the best return over its live window — admission already screens out the reckless bots (it caps how much of the $100k goes into the market at once and into any single stock), and the live window includes real market moves, so return over it is a genuine test, not a lucky calm run. There is no historical re-run, because in trading all past data is public and fittable, so the forward window is the only real out-of-sample test. Submissions close ~3 days before the round ends, so every bot gets a minimum live window.",
         "bots": rows,
     }
     OUT.write_text(json.dumps(payload, indent=2))
