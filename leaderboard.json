@@ -1,6 +1,6 @@
 {
-  "generated_at_utc": "2026-06-28T16:59:04Z",
-  "as_of_market_date": "2026-06-26",
+  "generated_at_utc": "2026-06-29T16:53:43Z",
+  "as_of_market_date": "2026-06-29",
   "round_start": "2026-06-02",
   "scoring": "forward-only",
   "start_cash": 100000.0,
@@ -65,6 +65,39 @@
       "trades": 9,
       "days": 5,
       "since": "2026-06-19"
+    },
+    {
+      "name": "vol-target",
+      "label": "reference",
+      "equity": 100297.2,
+      "pnl": 297.2,
+      "ret": 0.003,
+      "trades": 15,
+      "days": 19,
+      "since": "2026-06-01",
+      "cash": 71259.9,
+      "holdings": [
+        {
+          "t": "SPY",
+          "q": 13.0
+        },
+        {
+          "t": "QQQ",
+          "q": 7.0
+        },
+        {
+          "t": "SMH",
+          "q": 4.0
+        },
+        {
+          "t": "XLK",
+          "q": 21.0
+        },
+        {
+          "t": "XLV",
+          "q": 50.0
+        }
+      ]
     },
     {
       "name": "ajai",
@@ -177,39 +210,6 @@
       "since": "2026-06-17"
     },
     {
-      "name": "vol-target",
-      "label": "reference",
-      "equity": 99514.13,
-      "pnl": -485.87,
-      "ret": -0.0049,
-      "trades": 10,
-      "days": 18,
-      "since": "2026-06-01",
-      "cash": 7336.06,
-      "holdings": [
-        {
-          "t": "SPY",
-          "q": 37.0
-        },
-        {
-          "t": "QQQ",
-          "q": 23.0
-        },
-        {
-          "t": "SMH",
-          "q": 12.0
-        },
-        {
-          "t": "XLK",
-          "q": 66.0
-        },
-        {
-          "t": "XLV",
-          "q": 185.0
-        }
-      ]
-    },
-    {
       "name": "balaji",
       "label": "round 1 \u00b7 entrant",
       "equity": 99437.27,
@@ -238,6 +238,39 @@
       "trades": 8,
       "days": 5,
       "since": "2026-06-19"
+    },
+    {
+      "name": "dual-momentum-rotation",
+      "label": "house \u00b7 all-weather",
+      "equity": 98990.91,
+      "pnl": -1009.09,
+      "ret": -0.0101,
+      "trades": 5,
+      "days": 19,
+      "since": "2026-06-01",
+      "cash": 447.72,
+      "holdings": [
+        {
+          "t": "SMH",
+          "q": 32.0
+        },
+        {
+          "t": "XLK",
+          "q": 102.0
+        },
+        {
+          "t": "XLE",
+          "q": 351.0
+        },
+        {
+          "t": "XLY",
+          "q": 169.0
+        },
+        {
+          "t": "XLF",
+          "q": 390.0
+        }
+      ]
     },
     {
       "name": "aarya",
@@ -300,35 +333,31 @@
       "since": "2026-06-08"
     },
     {
-      "name": "dual-momentum-rotation",
-      "label": "house \u00b7 all-weather",
-      "equity": 97611.13,
-      "pnl": -2388.87,
-      "ret": -0.0239,
-      "trades": 5,
-      "days": 18,
+      "name": "sector-rotation",
+      "label": "reference",
+      "equity": 97562.44,
+      "pnl": -2437.56,
+      "ret": -0.0244,
+      "trades": 4,
+      "days": 19,
       "since": "2026-06-01",
-      "cash": 447.72,
+      "cash": 4135.62,
       "holdings": [
         {
           "t": "SMH",
-          "q": 32.0
+          "q": 39.0
         },
         {
           "t": "XLK",
-          "q": 102.0
+          "q": 122.0
         },
         {
           "t": "XLE",
-          "q": 351.0
+          "q": 421.0
         },
         {
           "t": "XLY",
-          "q": 169.0
-        },
-        {
-          "t": "XLF",
-          "q": 390.0
+          "q": 203.0
         }
       ]
     },
@@ -363,42 +392,13 @@
       "since": "2026-06-13"
     },
     {
-      "name": "sector-rotation",
-      "label": "reference",
-      "equity": 95967.58,
-      "pnl": -4032.42,
-      "ret": -0.0403,
-      "trades": 4,
-      "days": 18,
-      "since": "2026-06-01",
-      "cash": 4135.62,
-      "holdings": [
-        {
-          "t": "SMH",
-          "q": 39.0
-        },
-        {
-          "t": "XLK",
-          "q": 122.0
-        },
-        {
-          "t": "XLE",
-          "q": 421.0
-        },
-        {
-          "t": "XLY",
-          "q": 203.0
-        }
-      ]
-    },
-    {
       "name": "drawdown-momentum",
       "label": "house \u00b7 the bar to beat",
-      "equity": 95633.92,
-      "pnl": -4366.08,
-      "ret": -0.0437,
+      "equity": 95999.49,
+      "pnl": -4000.51,
+      "ret": -0.04,
       "trades": 22,
-      "days": 18,
+      "days": 19,
       "since": "2026-06-01",
       "cash": 55247.99,
       "holdings": [
@@ -439,33 +439,13 @@
       "since": "2026-06-18"
     },
     {
-      "name": "opu",
-      "label": "round 1 \u00b7 entrant",
-      "equity": 94456.83,
-      "pnl": -5543.17,
-      "ret": -0.0554,
-      "trades": 8,
-      "days": 17,
-      "since": "2026-06-02"
-    },
-    {
-      "name": "mohit",
-      "label": "round 1 \u00b7 entrant",
-      "equity": 93531.25,
-      "pnl": -6468.75,
-      "ret": -0.0647,
-      "trades": 24,
-      "days": 16,
-      "since": "2026-06-03"
-    },
-    {
       "name": "ai-momentum-basket",
       "label": "house \u00b7 aggressive",
-      "equity": 93488.21,
-      "pnl": -6511.79,
-      "ret": -0.0651,
+      "equity": 94747.76,
+      "pnl": -5252.24,
+      "ret": -0.0525,
       "trades": 9,
-      "days": 18,
+      "days": 19,
       "since": "2026-06-01",
       "cash": 0.0,
       "holdings": [
@@ -506,6 +486,26 @@
           "q": 164.1667
         }
       ]
+    },
+    {
+      "name": "opu",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 94456.83,
+      "pnl": -5543.17,
+      "ret": -0.0554,
+      "trades": 8,
+      "days": 17,
+      "since": "2026-06-02"
+    },
+    {
+      "name": "mohit",
+      "label": "round 1 \u00b7 entrant",
+      "equity": 93531.25,
+      "pnl": -6468.75,
+      "ret": -0.0647,
+      "trades": 24,
+      "days": 16,
+      "since": "2026-06-03"
     },
     {
       "name": "robert",
