@@ -12,7 +12,7 @@ from statistics import pstdev
 # -----------------------------------------------------------------------------
 # universe
 # -----------------------------------------------------------------------------
-RISK_ON_ETFS = ("SPY", "QQQ", "SMH", "XLK", "XLV", "XLY", "XLC", "XLF")
+RISK_ON_ETFS = ("SPY", "QQQ", "SMH", "XLK", "XLV", "XLY", "XLC", "XLF", "QLD", "SSO")
 LARGE_CAP = (
     "NVDA", "AMD", "AVGO", "MU", "MRVL",
     "AAPL", "MSFT", "GOOGL", "META", "AMZN",
@@ -23,11 +23,17 @@ DEFENSIVE = ("XLP", "XLU", "XLE", "GLD", "TLT")
 HARD_BRAKE_BASKET = ("XLP", "XLU", "GLD")
 SOFT_DEFENSIVE = ("XLP", "XLU")
 
+BETA = {
+    "TQQQ": 3.0, "SOXL": 3.0, "UPRO": 3.0, "SPXL": 3.0, "TNA": 3.0, "FAS": 3.0,
+    "TECL": 3.0, "LABU": 3.0, "CURE": 3.0, "DRN": 3.0, "UDOW": 3.0, "NAIL": 3.0,
+    "QLD": 2.0, "SSO": 2.0, "DDM": 2.0, "ROM": 2.0, "UWM": 2.0, "AGQ": 2.0,
+}
+
 # -----------------------------------------------------------------------------
 # knobs
 # -----------------------------------------------------------------------------
-NAME_CAP = 0.12
-GROSS_MAX = 0.95
+NAME_CAP = 0.18
+GROSS_MAX = 1.35
 REBALANCE_EVERY = 5
 DEAD_BAND = 0.03
 ADAPTIVE_THRESHOLD = 0.005
@@ -45,30 +51,37 @@ TOP_N_RISKON = 7
 
 
 # brake
+# -----------------------------------------------------------------------------
 BRAKE_R1 = -0.020
 BRAKE_R3 = -0.040
 BRAKE_VOL_10D = 0.40
 BRAKE_COOLDOWN = 3
 
 # panic state (Daniel-Moskowitz)
+# -----------------------------------------------------------------------------
 PANIC_BEAR_RET = -0.10
 PANIC_VOL = 0.30
 PANIC_GROSS_CAP = 0.25
 
 # asymmetric regime persistence
+# -----------------------------------------------------------------------------
 CONFIRM_ENTER_RISKON = 2
 CONFIRM_LEAVE_RISKON = 2
 
 # self-DD governor
+# -----------------------------------------------------------------------------
 DD_TIER_1 = 0.060
 DD_TIER_2 = 0.100
 DD_TIER_3 = 0.150
 
 # blend in risk-on
-RISKON_RISK_PCT = 0.95
+# -----------------------------------------------------------------------------
+RISKON_RISK_PCT = 0.775
+RISKON_LEV_PCT = 0.175
 RISKON_DEF_PCT = 0.05
 
 _ANN = 252 ** 0.5
+
 
 # -----------------------------------------------------------------------------
 # state
@@ -251,11 +264,13 @@ def _xs_momentum_filter(market_state, basket):
 def _apply_caps(weights, gross_cap):
     if not weights:
         return {}
-    total_raw = sum(weights.values())
-    if total_raw <= 0:
+    
+    raw_beta_sum = sum(w * BETA.get(t, 1.0) for t, w in weights.items())
+    if raw_beta_sum <= 0:
         return {}
-    target_total = min(gross_cap, total_raw)
-    scaled = {t: w * target_total / total_raw for t, w in weights.items()}
+        
+    scaled = {t: w * gross_cap / raw_beta_sum for t, w in weights.items()}
+    
     capped = {}
     overflow = 0.0
     for t, w in scaled.items():
@@ -264,6 +279,7 @@ def _apply_caps(weights, gross_cap):
             capped[t] = NAME_CAP
         else:
             capped[t] = w
+            
     if overflow > 1e-9:
         room = {t: NAME_CAP - w for t, w in capped.items() if w < NAME_CAP}
         room_total = sum(room.values())
@@ -272,6 +288,11 @@ def _apply_caps(weights, gross_cap):
                 if capped[t] < NAME_CAP:
                     extra = overflow * room[t] / room_total
                     capped[t] = min(NAME_CAP, capped[t] + extra)
+                    
+    beta_sum = sum(w * BETA.get(t, 1.0) for t, w in capped.items())
+    if beta_sum > gross_cap:
+        capped = {t: w * gross_cap / beta_sum for t, w in capped.items()}
+        
     return capped
 
 
@@ -307,18 +328,39 @@ def _targets(market_state, equity, regime):
         return _apply_caps(raw, cap)
 
     risk_w = _inv_vol_weights(winners, market_state)
+    lev_w = _inv_vol_weights(("TQQQ",), market_state)
     def_w = _inv_vol_weights(SOFT_DEFENSIVE, market_state)
-    raw = {t: w * RISKON_RISK_PCT for t, w in risk_w.items()}
+
+    raw = {}
+    if lev_w:
+        risk_pct = RISKON_RISK_PCT
+        lev_pct = RISKON_LEV_PCT
+    else:
+        risk_pct = RISKON_RISK_PCT + RISKON_LEV_PCT
+        lev_pct = 0.0
+
+    for t, w in risk_w.items():
+        raw[t] = w * risk_pct
+    if lev_pct > 0:
+        for t, w in lev_w.items():
+            raw[t] = raw.get(t, 0.0) + w * lev_pct
     for t, w in def_w.items():
         raw[t] = raw.get(t, 0.0) + w * RISKON_DEF_PCT
 
     gross_cap = min(GROSS_MAX, dd_cap * GROSS_MAX)
-    sum_raw = sum(raw.values())
+    raw_beta_sum = sum(w * BETA.get(t, 1.0) for t, w in raw.items())
     port_vol = _portfolio_vol_estimate(raw, market_state)
     port_vol = max(PORT_VOL_FLOOR, min(PORT_VOL_CEILING, port_vol))
-    vol_target_gross = min(gross_cap, sum_raw * (TARGET_PORT_VOL / port_vol))
+    vol_target_gross = min(gross_cap, raw_beta_sum * (TARGET_PORT_VOL / port_vol))
 
-    return _apply_caps(raw, vol_target_gross)
+    targets = _apply_caps(raw, vol_target_gross)
+    if _tick < 30:
+        print(f"Tick: {_tick}, regime: {regime}, winners: {winners}")
+        print(f"Raw beta sum: {raw_beta_sum}, vol target: {vol_target_gross}")
+        print(f"Targets: {targets}")
+        actual_beta_sum = sum(w * BETA.get(t, 1.0) for t, w in targets.items())
+        print(f"Actual beta sum: {actual_beta_sum}")
+    return targets
 
 
 # -----------------------------------------------------------------------------
