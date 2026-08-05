@@ -134,12 +134,12 @@ ENTRY = {
     "sumegh": ROUND_START,
     "shyam": ROUND_START,
     "harsimran": ROUND_START,
-    # Revision arrived Jul 23; score only from the first session after receipt.
+    # Latest revision received Jul 22; score only from the first session after receipt.
     "sankeerth": "2026-07-23",
     "siddu": ROUND_START,
     "rohit": ROUND_START,
     "nagarjuna": ROUND_START,
-    "balaji": ROUND_START,
+    "balaji": "2026-07-31",
     # Revision 2 arrived before the Jul 21 open; score it forward from Jul 21.
     "ajai": "2026-07-21",
     "aksham": ROUND_START,
@@ -158,14 +158,14 @@ ENTRY = {
     "shivkumar": ROUND_START,
     "sham": "2026-07-08",
     "rishchith": "2026-07-08",
-    "meet": "2026-07-10",
+    "meet": "2026-07-30",
     "vishwas": ROUND_START,
     # Revision 1 arrived after the Jul 17 close; score it forward from Jul 20.
     "aaryan": "2026-07-20",
     # Corrected submission arrived before the Jul 13 US market open.
     "elamaran": "2026-07-13",
-    # Revision arrived Jul 23; score only from the first session after receipt.
-    "dhruv": "2026-07-23",
+    # Latest revision received Jul 27; score only from the first session after receipt.
+    "dhruv": "2026-07-28",
     # Submission arrived after the Jul 20 close; score it forward from Jul 21.
     "vishal": "2026-07-21",
 }
