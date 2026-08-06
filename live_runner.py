@@ -141,7 +141,8 @@ ENTRY = {
     "nagarjuna": ROUND_START,
     "balaji": "2026-07-31",
     # Revision 2 arrived before the Jul 21 open; score it forward from Jul 21.
-    "ajai": "2026-07-21",
+    # Final revision received before the Aug 5 market open; score it forward only.
+    "ajai": "2026-08-05",
     "aksham": ROUND_START,
     "darshan": ROUND_START,
     "tanishq": ROUND_START,
@@ -150,7 +151,8 @@ ENTRY = {
     "krunal": ROUND_START,
     "rohan": ROUND_START,
     "dev": ROUND_START,
-    "deepika": ROUND_START,
+    # Revision 3 received before the Aug 6 market open; do not back-score it.
+    "deepika": "2026-08-06",
     "om": ROUND_START,
     "raam": ROUND_START,
     "navika": ROUND_START,
