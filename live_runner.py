@@ -158,7 +158,8 @@ ENTRY = {
     "navika": ROUND_START,
     "yuva": ROUND_START,
     "shivkumar": ROUND_START,
-    "sham": "2026-07-08",
+    # Revision received before the Aug 10 market open; score it forward only.
+    "sham": "2026-08-10",
     "rishchith": "2026-07-08",
     "meet": "2026-07-30",
     "vishwas": ROUND_START,
