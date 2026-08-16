@@ -144,8 +144,10 @@ Keep the repo private. Email us first; we reply with a **read-only deploy key** 
 - We get **read access to that one repo and nothing else** — we *cannot push to it*, can't see your other repos, and access dies when you remove the key.
 - Why not "add us as a collaborator"? On a personal GitHub repo a collaborator gets **write** access. We don't want that and you shouldn't grant it. A deploy key is read-only and scoped to the single repo.
 
-**3. Endpoint mode** *(airtight — you never share code)*
-Host an HTTPS endpoint that accepts `POST /decide` with `{market_state, portfolio_state, cash}` and returns `{orders: [...]}`. We send data; you return orders. Your code, prompts, and any API keys never leave your server. Per-agent latency is published on the leaderboard so it stays fair. Include the endpoint URL in your email.
+**3. Endpoint mode** *(private code — forward scoring only)*
+Host an HTTPS endpoint that accepts `POST /decide` with `{market_state, portfolio_state, cash}` and returns `{orders: [...]}`. We send data; you return orders. Your code, prompts, and API keys never leave your server.
+
+Endpoint decisions are captured **before the target market session**, hashed, and replayed from that immutable response at the opening fill. We never backfill a live endpoint over market sessions that have already happened. A missed, late, unavailable, redirected, non-HTTPS, private-network, oversized, or invalid response produces no new decision for that session. The scoring engine independently enforces the ticker universe, finite positive quantities, cash, 30% single-name cap, and 1.5x beta-gross cap. Include the endpoint URL in your email.
 
 > Whichever you pick: we only ever read and run your code to score it. We don't reuse your strategy, and you keep the IP (this template is MIT; your repo stays yours).
 

@@ -4,6 +4,10 @@ set -euo pipefail
 REPO_DIR="${0:A:h}"
 cd "$REPO_DIR"
 
+# Endpoint agents are captured before the target session and replayed from an
+# immutable local log. The capture command refuses to call after the open.
+python3 capture_endpoint_orders.py
+
 # The private entrants live only on this scoring machine. Never publish or move
 # their code; only the generated JSON artifacts are committed.
 if ! python3 market_open.py; then

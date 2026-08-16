@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-08-16T07:50:07Z",
+  "generated_at_utc": "2026-08-16T08:05:09Z",
   "as_of_market_date": "2026-08-14",
   "round_id": "trading-v0-round-2",
   "round_name": "Round 2",
@@ -484,17 +484,6 @@
       "trades": 52,
       "days": 19,
       "since": "2026-07-21",
-      "as_of": "2026-08-14"
-    },
-    {
-      "name": "ddrives",
-      "label": "round 2 \u00b7 entrant \u00b7 endpoint",
-      "equity": 98413.54,
-      "pnl": -1586.46,
-      "ret": -0.0159,
-      "trades": 13,
-      "days": 4,
-      "since": "2026-08-11",
       "as_of": "2026-08-14"
     },
     {

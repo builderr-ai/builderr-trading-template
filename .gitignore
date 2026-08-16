@@ -12,3 +12,4 @@ data_cache/
 
 # private entrants' code — scored locally, never published
 private_agents/
+private_endpoint_decisions/

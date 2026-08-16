@@ -173,11 +173,14 @@ ENTRY = {
     # Submission arrived after the Jul 20 close; score it forward from Jul 21.
     "vishal": "2026-07-21",
     # Endpoint submission arrived after the Aug 10 close; score from Aug 11.
-    "ddrives": "2026-08-11",
+    "ddrives": "2026-08-17",
 }
 CHART_START = ROUND_START    # common x-axis for the illustrative race chart (Round 2 open)
 SLIP_EQUITY = 0.0005
 SLIP_LEVERAGED = 0.0010
+MAX_NAME_WEIGHT = 0.30
+MAX_BETA_GROSS = 1.50
+MAX_ORDERS_PER_DECISION = 100
 BETA_3X = {"TQQQ", "SOXL", "UPRO", "SPXL", "TNA", "FAS", "TECL", "LABU", "CURE", "DRN", "UDOW", "NAIL"}
 BETA_2X = {"QLD", "SSO", "DDM", "ROM", "UWM", "AGQ"}
 PRIZE_SPLIT = ["$600", "$250", "$150"]
@@ -203,7 +206,7 @@ def load_decide_from(path: Path):
     spec = importlib.util.spec_from_file_location(path.stem, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.decide
+    return getattr(mod, "AGENT", mod.decide)
 
 
 def _rows_from_df(df, need):
@@ -310,7 +313,7 @@ def fetch_bars() -> dict[str, list[dict]]:
     return bars
 
 
-def run_bot(decide, bars: dict[str, list[dict]], entry_date: str = SCORE_START) -> dict:
+def run_bot(decide, bars: dict[str, list[dict]], entry_date: str = SCORE_START, *, enforce_limits: bool = True) -> dict:
     """Run a $100k paper account from the first scored session on/after entry_date
     to the latest bar — forward-only, so it is never scored before its published
     start.
@@ -349,26 +352,51 @@ def run_bot(decide, bars: dict[str, list[dict]], entry_date: str = SCORE_START) 
             "last_prices": prior_close,
         }
         try:
-            orders = decide(market_state, portfolio_state, cash) or []
+            session_decide = getattr(decide, "decide_for_session", None)
+            if callable(session_decide):
+                orders = session_decide(date, market_state, portfolio_state, cash) or []
+            else:
+                orders = decide(market_state, portfolio_state, cash) or []
         except Exception:
             orders = []
 
-        for o in orders:
+        # Entrant output is untrusted. The engine owns the final safety boundary:
+        # capped input, finite quantities, sell-before-buy execution, and the
+        # published 30% single-name / 1.5x beta-gross limits at opening fills.
+        normalized = []
+        for o in orders[:MAX_ORDERS_PER_DECISION] if isinstance(orders, list) else []:
             try:
-                tk, side, qty = o["ticker"], o["side"], float(o["quantity"])
+                tk = str(o["ticker"]).strip().upper()
+                side, qty = o["side"], float(o["quantity"])
             except (KeyError, TypeError, ValueError):
                 continue
-            if side not in ("buy", "sell") or qty <= 0 or tk not in open_px:
+            if side not in ("buy", "sell") or not math.isfinite(qty) or qty <= 0 or tk not in open_px:
                 continue
+            normalized.append((tk, side, qty))
+
+        for tk, side, qty in sorted(normalized, key=lambda x: 0 if x[1] == "sell" else 1):
             px = open_px[tk]  # fill at the day's OPEN
             slip = SLIP_LEVERAGED if beta(tk) > 1 else SLIP_EQUITY
             if side == "buy":
                 fill = px * (1 + slip)
-                if fill * qty > cash:
-                    qty = cash / fill if fill > 0 else 0
+                equity_at_open = max(
+                    cash + sum(positions.get(t, 0.0) * open_px.get(t, 0.0) for t in positions),
+                    1e-9,
+                )
+                held = positions.get(tk, 0.0)
+                if enforce_limits:
+                    concentration_room = max(0.0, MAX_NAME_WEIGHT * equity_at_open - held * fill)
+                    beta_used = sum(
+                        positions.get(t, 0.0) * open_px.get(t, 0.0) * beta(t)
+                        for t in positions
+                    )
+                    beta_room = max(0.0, MAX_BETA_GROSS * equity_at_open - beta_used)
+                    max_notional = min(cash, concentration_room, beta_room / beta(tk))
+                else:
+                    max_notional = cash
+                qty = min(qty, max_notional / fill if fill > 0 else 0.0)
                 if qty <= 0:
                     continue
-                held = positions.get(tk, 0.0)
                 avg_cost[tk] = (avg_cost.get(tk, 0.0) * held + fill * qty) / (held + qty) if held + qty > 0 else fill
                 positions[tk] = held + qty
                 cash -= fill * qty
@@ -433,7 +461,7 @@ def main() -> int:
     for filename, name, label in FIELD:
         entry = ENTRY.get(name, SCORE_START)
         try:
-            m = run_bot(load_decide(filename), bars, entry)
+            m = run_bot(load_decide(filename), bars, entry, enforce_limits="market context" not in label.lower())
         except Exception as e:  # noqa: BLE001
             print(f"skip {filename}: {e!r}")
             continue
@@ -461,6 +489,10 @@ def main() -> int:
     for filename, name, label in PRIVATE_FIELD:
         entry = ENTRY.get(name, SCORE_START)
         p = PRIVATE_DIR / filename
+        # Endpoint rows are valid only under the current locked-forward start.
+        # Drop any legacy historical-replay record instead of carrying it over.
+        if "endpoint" in label.lower() and saved.get(name, {}).get("since") != entry:
+            saved.pop(name, None)
         if p.exists():
             try:
                 m = run_bot(load_decide_from(p), bars, entry)
