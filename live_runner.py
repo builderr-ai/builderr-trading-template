@@ -107,6 +107,7 @@ PRIVATE_FIELD = [
     ("elamaran_agent.py",            "elamaran",               "round 2 · entrant"),
     ("dhruv_agent.py",               "dhruv",                  "round 2 · entrant"),
     ("vishal_agent.py",              "vishal",                  "round 2 · entrant"),
+    ("ddrives_agent.py",             "ddrives",                 "round 2 · entrant · endpoint"),
 ]
 
 EVAL_DAYS = 60       # (history sizing only) trailing window used when fetching bars
@@ -171,6 +172,8 @@ ENTRY = {
     "dhruv": "2026-07-28",
     # Submission arrived after the Jul 20 close; score it forward from Jul 21.
     "vishal": "2026-07-21",
+    # Endpoint submission arrived after the Aug 10 close; score from Aug 11.
+    "ddrives": "2026-08-11",
 }
 CHART_START = ROUND_START    # common x-axis for the illustrative race chart (Round 2 open)
 SLIP_EQUITY = 0.0005
