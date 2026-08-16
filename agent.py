@@ -1,91 +1,79 @@
 """
-Conviction-Weighted Daily Rotation bot — builderr trading challenge.
+Momentum + Risk-Off Rotation bot — builderr trading challenge Round 2.
 
-A deliberately different design from the weekly vol-throttle bot: this one
-rebalances DAILY and sizes positions by MEASURED MOMENTUM STRENGTH, not
-equal weight. The goal is faster reaction and bigger bets on the strongest
-signals -- but every increase in trading rate or position size is backed by
-a specific number computed from price data, never a blind increase.
+Built on top of the original vishwas_agent.py codebase. Four targeted
+additions from Arnav's Round 1 winning algorithm to fix the downside loss
+problem while keeping the upside intact:
 
-Confirmed against the actual competition rules before building this:
-  - decide() is called once per trading day; a 60-second minimum hold is
-    satisfied automatically since decisions are daily-resolution by
-    construction. This is NOT scalping or HFT -- daily rebalancing is the
-    fastest cadence the contest format supports, and is explicitly within
-    the rules ("decisions are daily-resolution").
-  - Hard cap: 50 orders/day. This basket has at most 8 names, so even a
-    full daily sell-everything-buy-everything turnover is at most 16
-    orders/day -- comfortable margin under the cap, verified in code below
-    (MAX_ORDERS_PER_DAY guard).
+  1. DRAWDOWN TAPER: tracks peak equity from start of scoring. At -6%
+     drawdown, cuts target exposure to 50%. At -10%, cuts to 25%. This
+     is the single biggest fix for large downside losses — it scales back
+     automatically as the portfolio bleeds, not after it's already too late.
 
-What's different from the weekly version, and why:
-  1. REBALANCE EVERY DAY (not weekly) -- a real momentum/trend shift is
-     acted on the next trading day instead of waiting up to 5 days.
-  2. CONVICTION-WEIGHTED SIZING -- the strongest-momentum name gets the
-     biggest slice, the weakest of the winners gets the smallest, instead
-     of every winner getting an identical share. This is "more risk where
-     the data supports it," not "more risk everywhere."
-  3. FAST CRASH CHECK (borrowed from a stronger design reviewed this
-     session) -- a 3-day market return crash trigger sits alongside the
-     existing slow-SMA and vol-spike switches, so a sharp move is caught
-     within days, not weeks.
-  4. PER-POSITION TRAILING STOP -- each individual holding is sold if it
-     falls more than TRAIL_STOP from its own peak price since being
-     bought, regardless of the rest of the portfolio. This is a real,
-     measured exit rule for "getting out of a position that isn't
-     working" -- replacing any vague "hasn't moved" heuristic with an
-     actual drawdown-from-peak number.
+  2. FASTER CRASH BRAKE: adds a 3-day QQQ return check alongside the
+     existing vol-spike switch. If QQQ drops more than 4% in 3 days, the
+     bot flattens to cash immediately — this catches sharp moves before
+     realized volatility even has time to spike.
 
-What's UNCHANGED from the validated weekly version, on purpose:
-  - Same basket: NVDA, AMD, MU, MRVL, AVGO, SMH, AAPL, MSFT. Nothing added.
-  - Same hard position cap (24%) and same total deployed-capital ceiling
-    (~96%), both comfortably inside the rules' 30% / 1.5x limits.
-  - Same long-only, no-leverage, no-network, no-lookahead design.
+  3. RE-ENTRY HYSTERESIS: after going to cash, requires QQQ to clearly
+     reclaim its SMA (price > SMA * 1.01, a 1% buffer) before rebuying.
+     Previously the bot could re-enter the moment QQQ touched the SMA from
+     below, which meant buying right at resistance in a choppy market.
 
-No network calls. No LLM. No lookahead -- every calculation only uses bars
-already given to decide() up to "today."
+  4. CHURN REDUCTION: MIN_TRADE_PCT raised from 1% to 3% of equity. The
+     previous version was generating ~19 trades in 15 days on 8 names —
+     that's whipsaw from names flickering in/out of the top-4 on tiny
+     score differences. 3% threshold absorbs that noise without missing
+     real rebalances.
 
-12 real parameters total: BASKET, MARKET_TICKER, MOM_LOOKBACK, TREND_SMA,
-MARKET_SMA, VOL_LOOKBACK, VOL_SPIKE_MULT, FAST_CRASH_LOOKBACK,
-FAST_CRASH_RET, MAX_WEIGHT, TRAIL_STOP, MIN_TRADE_PCT. More than the
-original 5-parameter version -- that's a real trade-off of doing more
-(daily rebalancing, conviction sizing, two extra safety checks), and it's
-named here rather than hidden.
+Everything else from the original codebase is unchanged:
+  - Same basket (NVDA, AMD, MU, MRVL, AVGO, SMH, AAPL, MSFT)
+  - Same slow SMA switch (QQQ below 100-day → cash)
+  - Same vol-spike switch (20-day vol > 1.8x 100-day baseline → cash)
+  - Same vol-ratio throttle on total exposure
+  - Same weekly rebalance cadence
+  - Same position cap (24%, under the 30% rule)
+  - Same gross cap (~96% deployed, under the 1.5x leverage cap)
 """
 
 from __future__ import annotations
 from statistics import mean, pstdev
 from typing import Any
 
-# ---- Parameters ----------------------------------------------------------
-BASKET = ("NVDA", "AMD", "MU", "MRVL", "AVGO", "SMH", "AAPL", "MSFT")  # unchanged
+# ---- Parameters -----------------------------------------------------------
+BASKET = ("NVDA", "AMD", "MU", "MRVL", "AVGO", "SMH", "AAPL", "MSFT")
 MARKET_TICKER = "QQQ"
 TOP_K = 4
-MAX_WEIGHT = 0.24               # hard cap, comfortably under the 30% rule
-MOM_LOOKBACK = 63               # ~3 months, for ranking AND conviction strength
-TREND_SMA = 50                  # per-stock trend filter
-MARKET_SMA = 100                # slow risk-off switch length on QQQ
+MAX_WEIGHT = 0.24
+MOM_LOOKBACK = 63
+TREND_SMA = 50
+MARKET_SMA = 100
 VOL_LOOKBACK = 20
-VOL_SPIKE_MULT = 1.8            # fast vol switch: cash if vol > MULT x its 100d average
-FAST_CRASH_LOOKBACK = 3         # days, for the direct-return crash check
-FAST_CRASH_RET = -0.05          # cash if QQQ's 3-day return is worse than -5%
-TRAIL_STOP = 0.08               # per-position: sell if 8% below its own peak since bought
-STOP_COOLDOWN_DAYS = 3           # days a stopped-out name is blocked from being rebought
-SWAP_MARGIN = 0.03               # a held name needs to trail the worst NEW winner by more
-                                  # than this to actually get swapped out -- stops daily
-                                  # rebalancing from churning on noise right at the cutoff
-MIN_TRADE_PCT = 0.025            # ignore rebalances smaller than 2.5% of equity -- wide
-                                  # enough to absorb day-to-day conviction-weight wobble
-                                  # among names that all legitimately qualify (confirmed
-                                  # in testing: 1% was too tight and trimmed/re-added the
-                                  # same valid holding repeatedly on score noise alone)
-MAX_ORDERS_PER_DAY = 16         # explicit guard, comfortably under the 50/day rule cap
+VOL_SPIKE_MULT = 1.8
+MIN_WEIGHT_MULT = 0.5
+REBALANCE_EVERY_DAYS = 5
+MIN_TRADE_PCT = 0.03          # raised from 0.01 → reduces whipsaw churn
 
-_pos_high: dict[str, float] = {}   # tracks each held ticker's peak price since bought
-_stop_block: dict[str, int] = {}   # ticker -> days remaining before it can be rebought
+# ---- New: drawdown taper parameters (from Arnav's breakdown) --------------
+DD_HALF = -0.06               # at -6% from peak → cut exposure to 50%
+DD_LOCK = -0.10               # at -10% from peak → cut exposure to 25%
+TAPER_HALF = 0.50
+TAPER_LOCK = 0.25
+
+# ---- New: faster crash brake ----------------------------------------------
+FAST_CRASH_LOOKBACK = 3       # days
+FAST_CRASH_THRESHOLD = -0.04  # -4% over 3 days → go to cash immediately
+
+# ---- New: re-entry hysteresis --------------------------------------------
+REENTRY_BUFFER = 0.01         # QQQ must be 1% above SMA to re-enter from cash
+
+# ---- Persistent state -----------------------------------------------------
+_last_rebalance_date: str | None = None
+_peak_equity: float = 0.0            # tracks the high-water mark for drawdown taper
+_in_cash_state: bool = False         # tracks whether we're in a risk-off cash state
 
 
-# ---- Small helpers --------------------------------------------------------
+# ---- Small helpers (unchanged from original) ------------------------------
 def _closes(bars: list[dict[str, Any]] | None) -> list[float]:
     if not bars:
         return []
@@ -107,7 +95,7 @@ def _sma(values: list[float], n: int) -> float | None:
     return mean(values[-n:])
 
 
-def _ret(values: list[float], n: int) -> float | None:
+def _momentum(values: list[float], n: int) -> float | None:
     if len(values) <= n:
         return None
     start = values[-(n + 1)]
@@ -117,7 +105,8 @@ def _ret(values: list[float], n: int) -> float | None:
 
 
 def _daily_returns(values: list[float]) -> list[float]:
-    return [values[i] / values[i - 1] - 1.0 for i in range(1, len(values)) if values[i - 1] > 0]
+    return [values[i] / values[i - 1] - 1.0
+            for i in range(1, len(values)) if values[i - 1] > 0]
 
 
 def _realized_vol(values: list[float], n: int) -> float | None:
@@ -138,28 +127,10 @@ def _vol_is_spiking(values: list[float]) -> bool:
     return current_vol > baseline_vol * VOL_SPIKE_MULT
 
 
-def _vol_regime_mult(values: list[float]) -> float:
-    """How elevated is current vol vs. its own normal baseline? 1.0 = normal.
-
-    Used to WIDEN both the swap margin and the trailing stop during choppy
-    conditions -- the exact mechanism that was missing: the bot was using
-    the same sensitivity in a calm trend and in a vol spike, and the churn
-    traced in testing happened specifically because daily rebalancing +
-    an 8% stop are tuned for normal conditions, not chop. This scales the
-    response to the data instead of hand-picking a single fixed threshold.
-    """
-    current_vol = _realized_vol(values, VOL_LOOKBACK)
-    baseline_vol = _realized_vol(values, MARKET_SMA)
-    if current_vol is None or baseline_vol is None or baseline_vol <= 0:
-        return 1.0
-    ratio = current_vol / baseline_vol
-    return max(1.0, min(ratio, 2.5))  # floor at 1.0 (never tighten below normal), cap at 2.5x
-
-
-def _fast_crash_triggered(values: list[float]) -> bool:
-    """Direct-return crash check: catches a sharp move within days, not weeks."""
-    r = _ret(values, FAST_CRASH_LOOKBACK)
-    return r is not None and r < FAST_CRASH_RET
+def _fast_crash(values: list[float]) -> bool:
+    """NEW: 3-day return crash check — catches sharp drops before vol spikes."""
+    r = _momentum(values, FAST_CRASH_LOOKBACK)
+    return r is not None and r < FAST_CRASH_THRESHOLD
 
 
 def _bar_date(market_state: dict, ticker: str) -> str | None:
@@ -168,6 +139,16 @@ def _bar_date(market_state: dict, ticker: str) -> str | None:
         return None
     ts = bars[-1].get("ts")
     return str(ts)[:10] if ts is not None else str(len(bars))
+
+
+def _days_since(market_state: dict, ticker: str, last_date: str | None) -> int | None:
+    if last_date is None:
+        return None
+    bars = market_state.get(ticker) or []
+    dates = [str(b.get("ts", i))[:10] for i, b in enumerate(bars)]
+    if last_date not in dates:
+        return None
+    return len(dates) - dates.index(last_date) - 1
 
 
 def _positions(portfolio_state: dict) -> dict[str, dict[str, float]]:
@@ -198,131 +179,106 @@ def _equity(portfolio_state: dict, cash: float) -> float:
     return max(total, 0.0)
 
 
-# ---- Core signal: what should we hold, and how much? ----------------------
-def target_weights(market_state: dict, held_tickers: frozenset[str] = frozenset()) -> dict[str, float]:
-    """Conviction-weighted target book: stronger momentum gets a bigger slice."""
+# ---- NEW: drawdown taper multiplier ---------------------------------------
+def _taper_mult(current_equity: float) -> float:
+    """
+    Returns a multiplier (0.25-1.0) based on drawdown from peak equity.
+    1.0 = no taper (normal), 0.5 = half exposure, 0.25 = quarter exposure.
+    Peak equity is updated every day we're above the previous high.
+    """
+    global _peak_equity
+    if current_equity > _peak_equity:
+        _peak_equity = current_equity
+    if _peak_equity <= 0:
+        return 1.0
+    dd = (current_equity / _peak_equity) - 1.0
+    if dd <= DD_LOCK:
+        return TAPER_LOCK    # -10% or worse → 25% exposure
+    elif dd <= DD_HALF:
+        return TAPER_HALF    # -6% to -10% → 50% exposure
+    else:
+        return 1.0           # less than -6% → full exposure
+
+
+# ---- Core signal: what to hold and how much (with taper applied) ----------
+def target_weights(
+    market_state: dict,
+    taper: float = 1.0,
+) -> dict[str, float]:
+    global _in_cash_state
+
     qqq = _closes(market_state.get(MARKET_TICKER))
     if len(qqq) < MARKET_SMA:
-        return {}  # not enough history -> stay in cash
+        return {}
 
     market_sma = _sma(qqq, MARKET_SMA)
-    slow_risk_on = market_sma is not None and qqq[-1] > market_sma
-    fast_risk_off = _vol_is_spiking(qqq) or _fast_crash_triggered(qqq)
+    if market_sma is None:
+        return {}
+
+    # ---- NEW: re-entry hysteresis -----------------------------------------
+    # If we're in cash, require QQQ to be 1% above SMA to re-enter.
+    # If we're invested, only exit when QQQ drops below SMA (no buffer).
+    if _in_cash_state:
+        slow_risk_on = qqq[-1] > market_sma * (1.0 + REENTRY_BUFFER)
+    else:
+        slow_risk_on = qqq[-1] > market_sma
+
+    # ---- Fast switches: vol spike OR 3-day crash (either forces cash) ------
+    fast_risk_off = _vol_is_spiking(qqq) or _fast_crash(qqq)
 
     if not slow_risk_on or fast_risk_off:
-        return {}  # any one of three independent checks is enough to force cash
+        _in_cash_state = True
+        return {}
 
+    _in_cash_state = False
+
+    # ---- Momentum ranking (unchanged) -------------------------------------
     scored: list[tuple[float, str]] = []
     for ticker in BASKET:
-        if _stop_block.get(ticker, 0) > 0:
-            continue  # blocked from rebuy after a recent trailing-stop exit
         values = _closes(market_state.get(ticker))
         if len(values) <= MOM_LOOKBACK or len(values) < TREND_SMA:
             continue
-        mom = _ret(values, MOM_LOOKBACK)
+        mom = _momentum(values, MOM_LOOKBACK)
         trend = _sma(values, TREND_SMA)
         if mom is None or trend is None:
             continue
         if values[-1] <= trend:
-            continue  # trend filter: only hold names still above their own SMA
-        if mom <= 0:
-            continue  # conviction sizing needs a positive score to size against
+            continue
         scored.append((mom, ticker))
 
     scored.sort(reverse=True)
-
-    # Swap-margin hysteresis: with daily rebalancing, scores near the TOP_K
-    # cutoff jostle from ordinary noise, not a real signal change. A held
-    # name keeps its seat unless a candidate currently outside the top K
-    # beats it by more than the margin -- this is what stops the bot from
-    # round-tripping a position on a score wobble. The margin itself widens
-    # when QQQ's own volatility is elevated vs. its normal baseline, since
-    # that's exactly when score-ordering noise is largest and churn is most
-    # costly (confirmed in testing: choppy/vol-spike regimes generate the
-    # most whipsaw at a fixed margin).
-    regime_mult = _vol_regime_mult(qqq)
-    effective_margin = SWAP_MARGIN * regime_mult
-
-    top = scored[:TOP_K]
-    rest = scored[TOP_K:]
-    held_outside = [(s, t) for s, t in rest if t in held_tickers]
-
-    for score, ticker in held_outside:
-        if not top:
-            break
-        worst_score, worst_ticker = top[-1]
-        if worst_ticker in held_tickers:
-            continue  # don't bump one held name for another
-        if score >= worst_score - effective_margin:
-            # keep the held name in instead of the marginal new winner
-            top[-1] = (score, ticker)
-            top.sort(reverse=True)
-
-    winners = top
+    winners = [t for _, t in scored[:TOP_K]]
     if not winners:
         return {}
 
-    # Conviction-weighted sizing: each winner's slice is proportional to its
-    # OWN momentum score relative to the total -- a real signal-strength
-    # number, not an equal split. This is the "bigger bet where the data
-    # supports it" mechanism. Capped at MAX_WEIGHT either way.
-    total_score = sum(score for score, _ in winners)
-    raw_weights = {t: (score / total_score) for score, t in winners} if total_score > 0 else {}
+    # ---- Vol-ratio throttle (unchanged) -----------------------------------
+    ratios: list[float] = []
+    for t in winners:
+        values = _closes(market_state.get(t))
+        current_vol = _realized_vol(values, VOL_LOOKBACK)
+        own_baseline = _realized_vol(values, MARKET_SMA)
+        if current_vol is not None and own_baseline is not None and own_baseline > 0:
+            ratios.append(current_vol / own_baseline)
 
-    n = len(winners)
-    equal_share = 1.0 / n
-    # Blend conviction-weighting with an equal-share floor so the single
-    # strongest name can't swallow the whole book on a fluke score -- the
-    # blend itself is the data-driven control on how aggressive sizing gets.
-    blended = {t: 0.5 * equal_share + 0.5 * raw_weights.get(t, 0.0) for t in [tk for _, tk in winners]}
+    if ratios:
+        avg_ratio = mean(ratios)
+        vol_throttle = max(MIN_WEIGHT_MULT, min(1.0, 1.0 / avg_ratio)) if avg_ratio > 0 else 1.0
+    else:
+        vol_throttle = 1.0
 
-    total_deploy = 0.96
-    return {t: min(MAX_WEIGHT, blended[t] * total_deploy) for t in blended}
-
-
-# ---- Per-position trailing stop -------------------------------------------
-def _trailing_stop_exits(
-    positions: dict[str, dict[str, float]],
-    prices: dict[str, float],
-    regime_mult: float = 1.0,
-) -> list[dict]:
-    """Sell any individual holding that's fallen TRAIL_STOP below its own peak.
-
-    The stop distance widens with regime_mult (>=1.0) during choppy/vol-spike
-    conditions, so the same 8% threshold that makes sense in a calm trend
-    doesn't fire on ordinary chop -- confirmed in testing as a real source
-    of cost during a synthetic vol-spike window.
-    """
-    global _pos_high, _stop_block
-    exits: list[dict] = []
-    effective_stop = TRAIL_STOP * regime_mult
-    for ticker in list(_pos_high):
-        if ticker not in positions:
-            del _pos_high[ticker]  # no longer held -> stop tracking
-    for ticker, pos in positions.items():
-        price = prices.get(ticker)
-        if not price or price <= 0:
-            continue
-        peak = _pos_high.get(ticker, price)
-        peak = max(peak, price)
-        _pos_high[ticker] = peak
-        if peak > 0 and price < peak * (1.0 - effective_stop):
-            qty = int(pos["quantity"])
-            if qty > 0:
-                exits.append({"ticker": ticker, "side": "sell", "quantity": qty})
-                del _pos_high[ticker]
-                _stop_block[ticker] = STOP_COOLDOWN_DAYS  # block immediate rebuy -> no whipsaw
-    return exits
+    # ---- NEW: apply drawdown taper on top of vol throttle -----------------
+    combined_throttle = vol_throttle * taper
+    base_slice = (0.96 / len(winners)) * combined_throttle
+    return {t: min(MAX_WEIGHT, base_slice) for t in winners}
 
 
-# ---- Turn target weights into orders --------------------------------------
+# ---- Turn target weights into orders (unchanged except MIN_TRADE_PCT) -----
 def _orders_to_rebalance(
     targets: dict[str, float],
     positions: dict[str, dict[str, float]],
     total_equity: float,
     prices: dict[str, float],
     cash_available: float,
-    already_sold: set[str],
 ) -> list[dict]:
     if total_equity <= 0:
         return []
@@ -331,8 +287,6 @@ def _orders_to_rebalance(
     sell_proceeds = 0.0
 
     for ticker, pos in positions.items():
-        if ticker in already_sold:
-            continue
         price = prices.get(ticker)
         if not price or price <= 0:
             continue
@@ -352,9 +306,7 @@ def _orders_to_rebalance(
 
     spendable = max(cash_available, 0.0) + sell_proceeds * 0.98
 
-    for ticker, weight in sorted(targets.items(), key=lambda kv: -kv[1]):
-        if ticker in already_sold:
-            continue  # just exited on a trailing stop -- don't immediately rebuy
+    for ticker, weight in sorted(targets.items()):
         price = prices.get(ticker)
         if not price or price <= 0:
             continue
@@ -370,13 +322,13 @@ def _orders_to_rebalance(
             orders.append({"ticker": ticker, "side": "buy", "quantity": qty})
             spendable -= qty * price
 
-    return orders[:MAX_ORDERS_PER_DAY]
+    return orders[:40]
 
 
-# ---- Entry point -----------------------------------------------------------
+# ---- Entry point ----------------------------------------------------------
 def decide(market_state: dict, portfolio_state: dict, cash: float) -> list[dict]:
     """Called once per day. Returns a list of long-only orders."""
-    global _stop_block
+    global _last_rebalance_date, _peak_equity, _in_cash_state
 
     if not market_state:
         return []
@@ -385,33 +337,38 @@ def decide(market_state: dict, portfolio_state: dict, cash: float) -> list[dict]
     if latest_date is None:
         return []
 
-    # Decay the rebuy cooldown once per day.
-    if _stop_block:
-        _stop_block = {t: d - 1 for t, d in _stop_block.items() if d - 1 > 0}
+    qqq = _closes(market_state.get(MARKET_TICKER))
 
-    positions = _positions(portfolio_state)
-    prices = {t: _closes(b)[-1] for t, b in market_state.items() if _closes(b)}
-
-    # Regime multiplier computed once per day from QQQ's own vol vs its
-    # baseline -- reused for both the trailing stop and (inside
-    # target_weights) the swap margin, so both widen together precisely
-    # when chop is elevated, the data-driven fix for the churn traced
-    # in testing during a synthetic vol-spike scenario.
-    qqq_closes = _closes(market_state.get(MARKET_TICKER))
-    regime_mult = _vol_regime_mult(qqq_closes) if qqq_closes else 1.0
-
-    # Trailing stops checked every single day, independent of the rebalance --
-    # this is the per-position "exit a real loser" mechanism, gated on an
-    # actual measured drawdown from peak, not a guess.
-    stop_orders = _trailing_stop_exits(positions, prices, regime_mult)
-    stopped_tickers = {o["ticker"] for o in stop_orders}
-
-    targets = target_weights(market_state, frozenset(positions.keys()))
-    total_equity = _equity(portfolio_state, cash)
-
-    rebalance_orders = _orders_to_rebalance(
-        targets, positions, total_equity, prices, cash, stopped_tickers
+    # Fast risk-off check — runs every day regardless of rebalance schedule
+    fast_risk_off_today = (
+        (_vol_is_spiking(qqq) or _fast_crash(qqq)) if qqq else False
     )
 
-    orders = stop_orders + rebalance_orders
-    return orders[:MAX_ORDERS_PER_DAY]
+    days_since = _days_since(market_state, MARKET_TICKER, _last_rebalance_date)
+    scheduled_rebalance = (
+        _last_rebalance_date is None
+        or days_since is None
+        or days_since >= REBALANCE_EVERY_DAYS
+    )
+
+    positions = _positions(portfolio_state)
+    holding_anything = len(positions) > 0
+
+    should_act = scheduled_rebalance or (fast_risk_off_today and holding_anything)
+    if not should_act:
+        return []
+
+    # ---- NEW: compute taper from current drawdown -------------------------
+    current_equity = _equity(portfolio_state, cash)
+    taper = _taper_mult(current_equity)
+
+    prices = {t: _closes(b)[-1] for t, b in market_state.items() if _closes(b)}
+
+    # Pass taper into target_weights so it scales exposure down during drawdowns
+    targets = target_weights(market_state, taper=taper)
+
+    orders = _orders_to_rebalance(targets, positions, current_equity, prices, cash)
+
+    if scheduled_rebalance:
+        _last_rebalance_date = latest_date
+    return orders
