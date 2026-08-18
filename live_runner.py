@@ -103,6 +103,9 @@ PRIVATE_FIELD = [
     ("rishchith_agent.py",           "rishchith",              "round 2 · entrant"),
     ("meet_agent.py",                "meet",                   "round 2 · entrant"),
     ("vishwas_agent.py",             "vishwas",                "round 2 · entrant"),
+    ("mahesh_agent.py",              "mahesh",                 "round 2 · entrant"),
+    ("harsh_agent.py",                "harsh",                  "round 2 · entrant"),
+    ("arya_agent.py",                 "arya",                   "round 2 · entrant"),
     ("aaryan_agent.py",              "aaryan",                 "round 2 · entrant"),
     ("elamaran_agent.py",            "elamaran",               "round 2 · entrant"),
     ("dhruv_agent.py",               "dhruv",                  "round 2 · entrant"),
@@ -164,6 +167,10 @@ ENTRY = {
     "rishchith": "2026-07-08",
     "meet": "2026-07-30",
     "vishwas": ROUND_START,
+    "mahesh": "2026-08-17",
+    "harsh": "2026-08-17",
+    # Arya's revision arrived during the Aug 18 session; score forward from the next session.
+    "arya": "2026-08-19",
     # Revision 3 arrived on Aug 8; score it forward from the next US market session.
     "aaryan": "2026-08-10",
     # Corrected submission arrived before the Jul 13 US market open.
