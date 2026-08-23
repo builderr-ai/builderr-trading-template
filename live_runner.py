@@ -167,7 +167,8 @@ ENTRY = {
     # Revision received before the Aug 10 market open; score it forward only.
     "sham": "2026-08-10",
     "rishchith": "2026-07-08",
-    "meet": "2026-07-30",
+    # Revision received Aug 22; score it only from the next US market session.
+    "meet": "2026-08-24",
     "vishwas": ROUND_START,
     "mahesh": "2026-08-17",
     "harsh": "2026-08-17",
@@ -501,9 +502,9 @@ def main() -> int:
     for filename, name, label in PRIVATE_FIELD:
         entry = ENTRY.get(name, SCORE_START)
         p = PRIVATE_DIR / filename
-        # Endpoint rows are valid only under the current locked-forward start.
-        # Drop any legacy historical-replay record instead of carrying it over.
-        if "endpoint" in label.lower() and saved.get(name, {}).get("since") != entry:
+        # A new entry date means new code or a corrected forward start. Never
+        # carry an older revision's score into the replacement revision.
+        if saved.get(name, {}).get("since") != entry:
             saved.pop(name, None)
         if p.exists():
             try:

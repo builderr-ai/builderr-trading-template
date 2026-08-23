@@ -59,6 +59,7 @@ def test_every_board_row_has_an_explicit_start() -> None:
     names = {name for _, name, _ in [*live_runner.FIELD, *live_runner.PRIVATE_FIELD]}
     assert names <= set(live_runner.ENTRY), names - set(live_runner.ENTRY)
     assert live_runner.ENTRY["aaryan"] == "2026-08-10"
+    assert live_runner.ENTRY["meet"] == "2026-08-24"
     assert live_runner.ENTRY["elamaran"] == "2026-07-13"
     assert live_runner.ENTRY["ddrives"] == "2026-08-17"
 
