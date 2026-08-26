@@ -169,7 +169,8 @@ ENTRY = {
     "rishchith": "2026-07-08",
     # Revision received Aug 22; score it only from the next US market session.
     "meet": "2026-08-24",
-    "vishwas": ROUND_START,
+    # Latest revision received before the Aug 26 US market open; score it forward only.
+    "vishwas": "2026-08-26",
     "mahesh": "2026-08-17",
     "harsh": "2026-08-17",
     # These submissions arrived before the Aug 19 US open.
