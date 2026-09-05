@@ -12,7 +12,7 @@
   <key>WorkingDirectory</key>
   <string>/Users/ssinha/.builderr-trading-runner</string>
   <key>StartInterval</key>
-  <integer>1800</integer>
+  <integer>3600</integer>
   <key>RunAtLoad</key>
   <true/>
   <key>EnvironmentVariables</key>
