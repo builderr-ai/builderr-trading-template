@@ -33,6 +33,15 @@ class EndpointReplayAgent:
             previous = actual
         return records
 
+    def has_locked_decision_for(self, session_date: str) -> bool:
+        """Return whether this endpoint has an untampered decision for a session.
+
+        A missing pre-session capture is evaluator state, not an instruction for
+        the entrant to make a no-op decision.  Callers use this to preserve the
+        last comparable score until a later valid capture is available.
+        """
+        return sum(r.get("target_session") == session_date for r in self._records()) == 1
+
     def decide_for_session(self, session_date, market_state, _portfolio_state, _cash):  # noqa: ANN001
         market_dates = [bars[-1].get("ts") for bars in market_state.values() if bars]
         market_as_of = max((str(d) for d in market_dates if d), default=None)

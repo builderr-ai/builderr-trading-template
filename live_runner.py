@@ -512,7 +512,16 @@ def main() -> int:
             saved.pop(name, None)
         if p.exists():
             try:
-                m = run_bot(load_decide_from(p), bars, entry)
+                decide = load_decide_from(p)
+                has_current_lock = getattr(decide, "has_locked_decision_for", None)
+                if callable(has_current_lock) and not has_current_lock(asof):
+                    # Remote endpoint orders must be sealed before the session.
+                    # Do not replay a missing capture as a no-op and thereby
+                    # overwrite the entrant's last comparable result.
+                    print(f"  {name:24s} (private) preserved at {saved.get(name, {}).get('as_of', 'unscored')}; "
+                          f"missing sealed endpoint decision for {asof}")
+                    continue
+                m = run_bot(decide, bars, entry)
                 aligned = [START_CASH] * max(0, len(chart_dates) - len(m["curve"])) + m["curve"]
                 if m["days"] > 0:
                     saved[name] = {"label": label, "equity": m["equity"], "pnl": m["pnl"],

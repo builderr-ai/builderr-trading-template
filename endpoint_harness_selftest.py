@@ -65,11 +65,14 @@ def test_replay_requires_exact_session_market_date_and_valid_hash_chain() -> Non
         path.write_text(json.dumps({"version": 1, "records": [record]}))
         agent = EndpointReplayAgent(path)
         market = {"QQQ": [{"ts": "2026-08-14", "close": 100.0}]}
+        assert agent.has_locked_decision_for("2026-08-17")
+        assert not agent.has_locked_decision_for("2026-08-18")
         assert len(agent.decide_for_session("2026-08-17", market, {}, 100_000)) == 1
         assert agent.decide_for_session("2026-08-18", market, {}, 100_000) == []
         tampered = json.loads(path.read_text())
         tampered["records"][0]["orders"][0]["quantity"] = 999_999
         path.write_text(json.dumps(tampered))
+        assert not agent.has_locked_decision_for("2026-08-17")
         assert agent.decide_for_session("2026-08-17", market, {}, 100_000) == []
 
 

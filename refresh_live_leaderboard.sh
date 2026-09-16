@@ -6,7 +6,12 @@ cd "$REPO_DIR"
 
 # Endpoint agents are captured before the target session and replayed from an
 # immutable local log. The capture command refuses to call after the open.
-python3 capture_endpoint_orders.py
+if ! python3 capture_endpoint_orders.py; then
+  # A remote endpoint that was not captured before the open is kept at its
+  # previous comparable score by live_runner.py. It must not freeze every
+  # local entrant or be treated as a no-op entrant decision.
+  print -u2 "endpoint capture unavailable; continuing with stale endpoint rows preserved"
+fi
 
 # The private entrants live only on this scoring machine. Never publish or move
 # their code; only the generated JSON artifacts are committed.
