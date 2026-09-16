@@ -520,17 +520,17 @@ def main() -> int:
                     # overwrite the entrant's last comparable result.
                     print(f"  {name:24s} (private) preserved at {saved.get(name, {}).get('as_of', 'unscored')}; "
                           f"missing sealed endpoint decision for {asof}")
-                    continue
-                m = run_bot(decide, bars, entry)
-                aligned = [START_CASH] * max(0, len(chart_dates) - len(m["curve"])) + m["curve"]
-                if m["days"] > 0:
-                    saved[name] = {"label": label, "equity": m["equity"], "pnl": m["pnl"],
-                                   "ret": round(m["ret"], 4), "trades": m["trades"],
-                                   "days": m["days"], "since": entry, "as_of": asof,
-                                   "curve": aligned}
-                    print(f"  {name:24s} (private) ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  {m['days']}d  Trades={m['trades']}")
                 else:
-                    print(f"  {name:24s} (private) pending first scored session from {entry}")
+                    m = run_bot(decide, bars, entry)
+                    aligned = [START_CASH] * max(0, len(chart_dates) - len(m["curve"])) + m["curve"]
+                    if m["days"] > 0:
+                        saved[name] = {"label": label, "equity": m["equity"], "pnl": m["pnl"],
+                                       "ret": round(m["ret"], 4), "trades": m["trades"],
+                                       "days": m["days"], "since": entry, "as_of": asof,
+                                       "curve": aligned}
+                        print(f"  {name:24s} (private) ${m['equity']:,.0f}  P&L {m['pnl']:+,.0f} ({m['ret']*100:+.2f}%)  {m['days']}d  Trades={m['trades']}")
+                    else:
+                        print(f"  {name:24s} (private) pending first scored session from {entry}")
             except Exception as e:  # noqa: BLE001
                 print(f"skip private {filename}: {e!r}")
         rec = saved.get(name)
