@@ -27,22 +27,20 @@ SOFT_DEFENSIVE = ("XLP", "XLU")
 # knobs
 # -----------------------------------------------------------------------------
 NAME_CAP = 0.12
-GROSS_MAX = 0.95
-REBALANCE_EVERY = 5
-DEAD_BAND = 0.03
-ADAPTIVE_THRESHOLD = 0.005
+GROSS_MAX = 1.0
+REBALANCE_EVERY = 10
+DEAD_BAND = 0.05
 
 VOL_LOOKBACK = 20
 LONG_VOL_LOOKBACK = 60
-TARGET_PORT_VOL = 0.18
+TARGET_PORT_VOL = 0.15
 PORT_VOL_FLOOR = 0.05
 PORT_VOL_CEILING = 0.50
 
 MOMENTUM_LOOKBACK = 63
 MOMENTUM_SKIP = 5
 NAME_TREND_DAYS = 50
-TOP_N_RISKON = 7
-
+TOP_N_RISKON = 6
 
 # brake
 BRAKE_R1 = -0.020
@@ -57,16 +55,16 @@ PANIC_GROSS_CAP = 0.25
 
 # asymmetric regime persistence
 CONFIRM_ENTER_RISKON = 2
-CONFIRM_LEAVE_RISKON = 2
+CONFIRM_LEAVE_RISKON = 1
 
 # self-DD governor
-DD_TIER_1 = 0.060
-DD_TIER_2 = 0.100
-DD_TIER_3 = 0.150
+DD_TIER_1 = 0.015
+DD_TIER_2 = 0.025
+DD_TIER_3 = 0.040
 
 # blend in risk-on
-RISKON_RISK_PCT = 0.95
-RISKON_DEF_PCT = 0.05
+RISKON_RISK_PCT = 0.85
+RISKON_DEF_PCT = 0.2
 
 _ANN = 252 ** 0.5
 
@@ -80,7 +78,6 @@ _peak_equity = 0.0
 _pending_regime = None
 _pending_count = 0
 _current_regime = "soft"
-_last_regime = None
 
 
 # -----------------------------------------------------------------------------
@@ -121,7 +118,7 @@ def _ann_vol(closes, n):
 def _raw_regime(market_state):
     qqq = _closes(market_state.get("QQQ") or [])
     spy = _closes(market_state.get("SPY") or [])
-    if len(qqq) < 100 or len(spy) < 100:
+    if len(qqq) < 30 or len(spy) < 60:
         return "soft"
 
     r1, r3 = _ret(qqq, 1), _ret(qqq, 3)
@@ -137,11 +134,12 @@ def _raw_regime(market_state):
        and spy_6mo < PANIC_BEAR_RET and spy_v20 > PANIC_VOL:
         return "panic"
 
-    qqq_100 = _sma(qqq, 100)
-    if qqq_100 is None:
+    spy_50 = _sma(spy, 50)
+    qqq_50 = _sma(qqq, 50)
+    if spy_50 is None or qqq_50 is None:
         return "soft"
 
-    above_short = qqq[-1] > qqq_100 * 1.002
+    above_short = spy[-1] > spy_50 * 1.005 and qqq[-1] > qqq_50 * 1.005
 
     # Long trend gate only if we have enough history; otherwise short gate alone.
     spy_200 = _sma(spy, 200)
@@ -325,7 +323,7 @@ def _targets(market_state, equity, regime):
 # main
 # -----------------------------------------------------------------------------
 def decide(market_state, portfolio_state, cash):
-    global _tick, _last_rebalance, _last_regime, _peak_equity
+    global _tick, _last_rebalance
     _tick += 1
 
     positions = {p["ticker"]: p for p in portfolio_state.get("positions", []) or []}
@@ -339,14 +337,8 @@ def decide(market_state, portfolio_state, cash):
     raw_regime = _raw_regime(market_state)
     regime = _confirm_regime(raw_regime)
 
-    # Reset drawdown governor peak on entering a fresh risk-on regime
-    if regime == "on" and _last_regime != "on":
-        _peak_equity = equity
-    _last_regime = regime
-
     derisk = regime == "hard" or _brake_cooldown > 0
     on_cadence = _tick - _last_rebalance >= REBALANCE_EVERY
-    is_scheduled = on_cadence and not derisk and regime == "on"
 
     if not on_cadence and not derisk:
         return []
@@ -354,32 +346,6 @@ def decide(market_state, portfolio_state, cash):
     targets = _targets(market_state, equity, regime)
     if not targets:
         return []
-
-    if is_scheduled:
-        score_map = {}
-        for t in RISK_ON:
-            closes = _closes(market_state.get(t) or [])
-            if not closes:
-                continue
-            sma = _sma(closes, NAME_TREND_DAYS)
-            mom = _ret(closes, MOMENTUM_LOOKBACK, MOMENTUM_SKIP)
-            if sma is not None and mom is not None and closes[-1] > sma and mom > 0:
-                score_map[t] = mom
-        
-        current_score = 0.0
-        for ticker, pos in positions.items():
-            p = last.get(ticker, 0.0)
-            if p > 0 and equity > 0:
-                w = (pos["quantity"] * p) / equity
-                current_score += w * score_map.get(ticker, 0.0)
-        
-        target_score = 0.0
-        for ticker, w in targets.items():
-            target_score += w * score_map.get(ticker, 0.0)
-            
-        improvement = target_score - current_score
-        if improvement <= ADAPTIVE_THRESHOLD:
-            return []
 
     orders = []
     for ticker, pos in positions.items():
@@ -407,6 +373,6 @@ def decide(market_state, portfolio_state, cash):
                 "quantity": min(abs(delta), cur_qty),
             })
 
-    if orders and not derisk:
+    if orders:
         _last_rebalance = _tick
     return orders
