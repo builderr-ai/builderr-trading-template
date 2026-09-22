@@ -122,7 +122,19 @@ START_CASH = 100_000.0
 ROUND_ID = "trading-v0-round-2"
 ROUND_NAME = "Round 2"
 ROUND_START = "2026-07-07"   # Round 2 starts at the Jul 7, 2026 US market open.
-ROUND_STATUS = "live"        # Current board: refresh against the latest fetched market bars.
+ROUND_END = "2026-09-30"     # Round 2 ends at the Sep 30, 2026 US market close; later sessions never count.
+ROUND_END_CLOSE_ET = "16:00"
+
+
+def round_status() -> str:
+    """"live" until the Round 2 end-date close in New York, "final" after."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    ny = ZoneInfo("America/New_York")
+    end = datetime.fromisoformat(f"{ROUND_END}T{ROUND_END_CLOSE_ET}").replace(tzinfo=ny)
+    return "final" if datetime.now(ny) >= end else "live"
+
+
 PRIZE_POOL_USD = 1_000
 SCORE_START = ROUND_START    # legacy fallback only; per-bot ENTRY dates below are authoritative
 
@@ -468,6 +480,9 @@ def _sharpe(curve):
 
 def main() -> int:
     bars = fetch_bars()
+    # Nothing after the round's last session is ever scored.
+    bars = {t: [b for b in rows if b["ts"] <= ROUND_END] for t, rows in bars.items()}
+    bars = {t: rows for t, rows in bars.items() if rows}
     if len(bars) < 12:
         print(f"fetched only {len(bars)} tickers — refusing to overwrite leaderboard.json")
         return 1
@@ -577,7 +592,8 @@ def main() -> int:
         "round_start": ROUND_START,
         "scoring": "forward-only",
         "start_cash": START_CASH,
-        "round_status": ROUND_STATUS,
+        "round_status": round_status(),
+        "round_end": ROUND_END,
         "prize_pool_usd": PRIZE_POOL_USD,
         "prize_split": {
             "first": PRIZE_SPLIT[0],
