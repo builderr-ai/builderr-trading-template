@@ -56,7 +56,7 @@ Tickers outside the universe are ignored.
 1. **Admission (instant, on submit).** A safety check, *not* a skill test. You're in if your bot
    runs cleanly, respects the caps, and doesn't blow up (>50% drawdown) across 3 hidden past
    market periods. You get a "robustness profile" (how it behaved) back by email.
-2. **Round 2 — the ranking (July 7 – September 4, 2026).** Your bot trades live on the shared
+2. **Round 2 — the ranking (July 7 – September 30, 2026).** Your bot trades live on the shared
    sandbox. Ranked by **forward return** over its live window. Arnav starts from the same Round 2
    opening window and is the benchmark to beat for the $1,000 prize pool and builder points.
 3. **Re-run.** Top finishers are re-run on market windows they never saw — to confirm skill, not luck.

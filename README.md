@@ -28,7 +28,7 @@ Fork this repo, implement `decide()` in `agent.py`, then send us the repo — **
 
 ## Submitted agent: Forward-Return Rotation Hybrid
 
-`agent.py` is a no-network, no-LLM strategy built for the live forward-return ranking (Round 2: July 7 – September 4, 2026):
+`agent.py` is a no-network, no-LLM strategy built for the live forward-return ranking (Round 2: July 7 – September 30, 2026):
 
 - **Risk regime:** risk-on only when SPY and QQQ are above their 50-day SMAs and QQQ 20-day volatility is below 35%.
 - **Risk-off book:** XLP / XLU / XLV / XLE with cash left over; no leverage.
@@ -122,7 +122,7 @@ That's it. A fair-weather strategy that's soft in a crash is *admitted* — skil
 
 ### Stage 2 — Live forward test — the ranking
 
-**Round 2 runs July 7 – September 4, 2026.** Admitted agents run live on the shared paper sandbox over the window. Same fills for everyone. Daily leaderboard. **Ranked by forward return**, with Arnav (the Round 1 winner) as the benchmark to beat for prize money and builder points. Submissions are open now — the earlier you're admitted, the more of the window your bot trades.
+**Round 2 runs July 7 – September 30, 2026.** Admitted agents run live on the shared paper sandbox over the window. Same fills for everyone. Daily leaderboard. **Ranked by forward return**, with Arnav (the Round 1 winner) as the benchmark to beat for prize money and builder points. Submissions are open now — the earlier you're admitted, the more of the window your bot trades.
 
 ### Stage 3 — Held-out rerun — the anti-luck check
 
@@ -134,7 +134,7 @@ Top finishers are re-run on **fresh windows (calm + stress) they've never seen**
 
 ## Submission
 
-You don't have to make your code public. Pick the path you're comfortable with — same competition, same scoring, regardless. All three: email the link to **submit@builderr.ai** (subject: `builderr submission — <your name>`); we run admission and email your robustness profile the same day (usually within a few hours); if admitted you're in the live round (Round 2: July 7 – September 4). You can revise up to 4 times before the Round 2 cutoff.
+You don't have to make your code public. Pick the path you're comfortable with — same competition, same scoring, regardless. All three: email the link to **submit@builderr.ai** (subject: `builderr submission — <your name>`); we run admission and email your robustness profile the same day (usually within a few hours); if admitted you're in the live round (Round 2: July 7 – September 30). You can revise up to 4 times before the Round 2 cutoff.
 
 **1. Public repo** *(simplest)*
 Push to a public GitHub repo, email the URL. Zero access setup and you get a public proof-of-work piece — but the field can read your strategy while the contest runs, and a public repo is the easiest place to leak a key. Good if you don't mind being open (or you'll open it after the contest anyway).
