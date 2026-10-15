@@ -74,6 +74,11 @@ def run_regime(agent_path: Path, name: str, regime: dict) -> dict:
     # Re-load the agent fresh for every regime so module-level globals reset —
     # the real engine runs each regime in its own process, so we mirror that.
     decide = load_decide(agent_path)
+    
+    # Reset rebalance log if available
+    if hasattr(decide.__module__, "reset_rebalance_log"):
+        decide.__module__.reset_rebalance_log()
+    
     bars = {t: _expand(rows) for t, rows in regime["bars"].items()}
     # Trading-day timeline = union of dates, sorted.
     all_dates = sorted({b["ts"] for rows in bars.values() for b in rows})
@@ -185,10 +190,17 @@ def run_regime(agent_path: Path, name: str, regime: dict) -> dict:
     mdd = _max_drawdown(equity_curve)
     sharpe = _sharpe(equity_curve)
     calmar = (_annualize(ret, len(equity_curve)) / mdd) if mdd > 1e-9 else 0.0
+    
+    # Capture rebalance summary if available
+    rebalance_summary = ""
+    if hasattr(decide.__module__, "get_rebalance_summary"):
+        rebalance_summary = decide.__module__.get_rebalance_summary()
+    
     return {
         "name": name, "ret": ret, "mdd": mdd, "sharpe": sharpe, "calmar": calmar,
         "trades": trades, "peak_gross": peak_gross, "peak_conc": peak_conc,
         "max_conc_streak": max_conc_streak, "errors": errors, "days": len(equity_curve),
+        "rebalance_summary": rebalance_summary,
     }
 
 
