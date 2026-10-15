@@ -1,74 +1,121 @@
-"""Calmar Rotation Hybrid.
-
-Contest objective: maximize 60-day forward Calmar, not raw return.
-
-The agent uses only the provided daily bars. It has no network calls, no LLM,
-no API keys, and no dependencies outside the Python standard library.
-
-Core idea:
-  * Risk-off when SPY/QQQ lose their 50-day trends or QQQ volatility is high.
-  * Risk-on rotates into the strongest broad/sector/mega-cap sleeves.
-  * A small 2x ETF overlay is allowed only in calm QQQ uptrends.
-  * Every target is capped below 24% and beta-adjusted gross is scaled below 1.35x.
+<<<<<<< Updated upstream
 """
-from __future__ import annotations
+Momentum + Risk-Off Rotation bot — builderr trading challenge Round 2.
 
-from math import sqrt
+Built on top of the original vishwas_agent.py codebase. Four targeted
+additions from Arnav's Round 1 winning algorithm to fix the downside loss
+problem while keeping the upside intact:
+
+  1. DRAWDOWN TAPER: tracks peak equity from start of scoring. At -6%
+     drawdown, cuts target exposure to 50%. At -10%, cuts to 25%. This
+     is the single biggest fix for large downside losses — it scales back
+     automatically as the portfolio bleeds, not after it's already too late.
+
+  2. FASTER CRASH BRAKE: adds a 3-day QQQ return check alongside the
+     existing vol-spike switch. If QQQ drops more than 4% in 3 days, the
+     bot flattens to cash immediately — this catches sharp moves before
+     realized volatility even has time to spike.
+
+  3. RE-ENTRY HYSTERESIS: after going to cash, requires QQQ to clearly
+     reclaim its SMA (price > SMA * 1.01, a 1% buffer) before rebuying.
+     Previously the bot could re-enter the moment QQQ touched the SMA from
+     below, which meant buying right at resistance in a choppy market.
+
+  4. CHURN REDUCTION: MIN_TRADE_PCT raised from 1% to 3% of equity. The
+     previous version was generating ~19 trades in 15 days on 8 names —
+     that's whipsaw from names flickering in/out of the top-4 on tiny
+     score differences. 3% threshold absorbs that noise without missing
+     real rebalances.
+
+Everything else from the original codebase is unchanged:
+  - Same basket (NVDA, AMD, MU, MRVL, AVGO, SMH, AAPL, MSFT)
+  - Same slow SMA switch (QQQ below 100-day → cash)
+  - Same vol-spike switch (20-day vol > 1.8x 100-day baseline → cash)
+  - Same vol-ratio throttle on total exposure
+  - Same weekly rebalance cadence
+  - Same position cap (24%, under the 30% rule)
+  - Same gross cap (~96% deployed, under the 1.5x leverage cap)
+"""
+
+from __future__ import annotations
 from statistics import mean, pstdev
 from typing import Any
 
-# Public v0 universe. Keep leveraged names out of the ranker; only use them as
-# a tightly gated overlay.
-RISK_CANDIDATES = (
-    "SPY", "QQQ", "DIA", "IWM",
-    "XLK", "XLF", "XLE", "XLV", "XLI", "XLY", "XLP", "XLU", "XLRE", "XLC", "SMH",
-    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
-)
-DEFENSIVE_WEIGHTS = (
-    ("XLP", 0.24),
-    ("XLU", 0.24),
-    ("XLV", 0.20),
-    ("XLE", 0.12),
-)
-BETA_MULTIPLE = {
-    "TQQQ": 3.0, "SOXL": 3.0, "UPRO": 3.0, "SPXL": 3.0, "TNA": 3.0,
-    "FAS": 3.0, "TECL": 3.0, "LABU": 3.0, "CURE": 3.0, "DRN": 3.0,
-    "UDOW": 3.0, "NAIL": 3.0,
-    "QLD": 2.0, "SSO": 2.0, "DDM": 2.0, "ROM": 2.0, "UWM": 2.0, "AGQ": 2.0,
-}
-
-REBALANCE_EVERY_DAYS = 5
+# ---- Parameters -----------------------------------------------------------
+BASKET = ("NVDA", "AMD", "MU", "MRVL", "AVGO", "SMH", "AAPL", "MSFT")
+MARKET_TICKER = "QQQ"
+TOP_K = 4
 MAX_WEIGHT = 0.24
-DRIFT_LIMIT = 0.27
-MAX_BETA_GROSS = 1.35
-MIN_TRADE_PCT = 0.015
+MOM_LOOKBACK = 63
+TREND_SMA = 50
+MARKET_SMA = 100
+VOL_LOOKBACK = 20
+VOL_SPIKE_MULT = 1.8
+MIN_WEIGHT_MULT = 0.5
+REBALANCE_EVERY_DAYS = 5
+MIN_TRADE_PCT = 0.03          # raised from 0.01 → reduces whipsaw churn
 
-_last_rebalance_bar_date: str | None = None
-_last_targets: dict[str, float] = {}
+# ---- New: drawdown taper parameters (from Arnav's breakdown) --------------
+DD_HALF = -0.06               # at -6% from peak → cut exposure to 50%
+DD_LOCK = -0.10               # at -10% from peak → cut exposure to 25%
+TAPER_HALF = 0.50
+TAPER_LOCK = 0.25
+
+# ---- New: faster crash brake ----------------------------------------------
+FAST_CRASH_LOOKBACK = 3       # days
+FAST_CRASH_THRESHOLD = -0.04  # -4% over 3 days → go to cash immediately
+
+# ---- New: re-entry hysteresis --------------------------------------------
+REENTRY_BUFFER = 0.01         # QQQ must be 1% above SMA to re-enter from cash
+
+# ---- Persistent state -----------------------------------------------------
+_last_rebalance_date: str | None = None
+_peak_equity: float = 0.0            # tracks the high-water mark for drawdown taper
+_in_cash_state: bool = False         # tracks whether we're in a risk-off cash state
 
 
-def closes(bars: list[dict[str, Any]] | None) -> list[float]:
+# ---- Small helpers (unchanged from original) ------------------------------
+def _closes(bars: list[dict[str, Any]] | None) -> list[float]:
     if not bars:
         return []
-    out: list[float] = []
-    for bar in bars:
+    out = []
+    for b in bars:
+=======
+import numpy as np
+import pandas as pd
+import warnings
+
+# Force-silence any environment warnings for the online server
+warnings.filterwarnings("ignore")
+
+class InstitutionalAlphaEngine:
+    @staticmethod
+    def calculate_hurst_exponent(close_prices: np.ndarray, max_lags: int =
+     10) -> float:
+>>>>>>> Stashed changes
         try:
-            close = float(bar["close"])
-        except (KeyError, TypeError, ValueError):
-            return []
-        if close <= 0:
-            return []
-        out.append(close)
-    return out
+            if len(close_prices) < max_lags * 2: 
+                return 0.50
+            lags = np.arange(2, max_lags)
+            variances = []
+            for lag in lags:
+                diffs = close_prices[lag:] - close_prices[:-lag]
+                std_dev = np.std(diffs)
+                variances.append(std_dev if std_dev > 0 else 1e-6)
+            poly = np.polyfit(np.log(lags), np.log(variances), 1)
+            return float(np.clip(poly[0] * 2.0, 0.0, 1.0))
+        except Exception: 
+            return 0.50
 
+<<<<<<< Updated upstream
 
-def sma(values: list[float], n: int) -> float | None:
+def _sma(values: list[float], n: int) -> float | None:
     if len(values) < n:
         return None
     return mean(values[-n:])
 
 
-def momentum(values: list[float], n: int) -> float | None:
+def _momentum(values: list[float], n: int) -> float | None:
     if len(values) <= n:
         return None
     start = values[-(n + 1)]
@@ -77,206 +124,290 @@ def momentum(values: list[float], n: int) -> float | None:
     return values[-1] / start - 1.0
 
 
-def realized_vol(values: list[float], n: int) -> float | None:
-    if len(values) <= n:
-        return None
-    window = values[-(n + 1):]
-    rets = []
-    for i in range(1, len(window)):
-        prev = window[i - 1]
-        if prev <= 0:
-            return None
-        rets.append(window[i] / prev - 1.0)
-    if len(rets) < 5:
-        return None
-    return pstdev(rets) * sqrt(252.0)
+def _daily_returns(values: list[float]) -> list[float]:
+    return [values[i] / values[i - 1] - 1.0
+            for i in range(1, len(values)) if values[i - 1] > 0]
 
 
-def current_positions(portfolio_state: dict[str, Any]) -> dict[str, dict[str, float]]:
-    positions: dict[str, dict[str, float]] = {}
+def _realized_vol(values: list[float], n: int) -> float | None:
+    rets = _daily_returns(values)
+    if len(rets) < n:
+        return None
+    window = rets[-n:]
+    if len(window) < 2:
+        return None
+    return pstdev(window) * (252 ** 0.5)
+
+
+def _vol_is_spiking(values: list[float]) -> bool:
+    current_vol = _realized_vol(values, VOL_LOOKBACK)
+    baseline_vol = _realized_vol(values, MARKET_SMA)
+    if current_vol is None or baseline_vol is None or baseline_vol <= 0:
+        return False
+    return current_vol > baseline_vol * VOL_SPIKE_MULT
+
+
+def _fast_crash(values: list[float]) -> bool:
+    """NEW: 3-day return crash check — catches sharp drops before vol spikes."""
+    r = _momentum(values, FAST_CRASH_LOOKBACK)
+    return r is not None and r < FAST_CRASH_THRESHOLD
+
+
+def _bar_date(market_state: dict, ticker: str) -> str | None:
+    bars = market_state.get(ticker) or []
+    if not bars:
+        return None
+    ts = bars[-1].get("ts")
+    return str(ts)[:10] if ts is not None else str(len(bars))
+
+
+def _days_since(market_state: dict, ticker: str, last_date: str | None) -> int | None:
+    if last_date is None:
+        return None
+    bars = market_state.get(ticker) or []
+    dates = [str(b.get("ts", i))[:10] for i, b in enumerate(bars)]
+    if last_date not in dates:
+        return None
+    return len(dates) - dates.index(last_date) - 1
+
+
+def _positions(portfolio_state: dict) -> dict[str, dict[str, float]]:
+    out: dict[str, dict[str, float]] = {}
     for raw in portfolio_state.get("positions", []) or []:
         ticker = str(raw.get("ticker", "")).upper()
         if not ticker:
             continue
+=======
+    @classmethod
+    def evaluate_asset(cls, df: pd.DataFrame) -> dict:
+        metrics = {"signal": "HOLD", "alpha_score": 0.0, "atr_pct": 0.01, "price": 0.0}
+>>>>>>> Stashed changes
         try:
-            qty = float(raw.get("quantity", 0.0))
-            avg_cost = float(raw.get("avg_cost", 0.0))
-        except (TypeError, ValueError):
-            continue
-        if qty <= 0:
-            continue
-        existing = positions.setdefault(ticker, {"quantity": 0.0, "avg_cost": avg_cost})
-        existing["quantity"] += qty
-        existing["avg_cost"] = avg_cost or existing["avg_cost"]
-    return positions
+            if df is None or len(df) < 30:
+                return metrics
+            
+            col_map = {str(c).lower().strip(): c for c in df.columns}
+            close_key = col_map.get('close', col_map.get('price', df.columns[-1]))
+            high_key = col_map.get('high', close_key)
+            low_key = col_map.get('low', close_key)
+            
+            closes = df[close_key].to_numpy(dtype=float)
+            highs = df[high_key].to_numpy(dtype=float)
+            lows = df[low_key].to_numpy(dtype=float)
+            
+            current_price = closes[-1]
+            metrics["price"] = current_price
+            prices_series = pd.Series(closes)
 
+            ema_9 = prices_series.ewm(span=9, adjust=False).mean().to_numpy()[-1]
+            ema_50 = prices_series.ewm(span=50, adjust=False).mean().to_numpy()[-1]
+            ema_100 = prices_series.ewm(span=100, adjust=False).mean().to_numpy()[-1] if len(closes) >= 100 else ema_50
 
-def equity(portfolio_state: dict[str, Any], cash: float) -> float:
+            hl = highs - lows
+            hc = np.abs(highs - np.roll(closes, 1))
+            lc = np.abs(lows - np.roll(closes, 1))
+            hc[0], lc[0] = 0, 0
+            atr = pd.Series(np.maximum(hl, np.maximum(hc, lc))).rolling(window=14).mean().to_numpy()[-1]
+            if np.isnan(atr) or atr <= 0: atr = current_price * 0.01
+            metrics["atr_pct"] = float(atr / current_price)
+
+            momentum = prices_series.pct_change().tail(5).mean()
+            if np.isnan(momentum): momentum = 0.0
+
+            delta = prices_series.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rsi = 100 - (100 / (1 + (gain / (loss + 1e-6))))
+            rsi_val = rsi.to_numpy()[-1]
+            if np.isnan(rsi_val): rsi_val = 50.0
+
+            hurst_val = cls.calculate_hurst_exponent(closes[-30:])
+
+            if hurst_val > 0.55:  # Trend
+                if current_price > ema_100 and momentum > 0 and rsi_val < 75:
+                    if current_price > ema_9:
+                        metrics["signal"] = "BUY"
+                        metrics["alpha_score"] = float(momentum * 100.0)
+                elif current_price < ema_50 or rsi_val > 80:
+                    metrics["signal"] = "SELL"
+
+            elif hurst_val < 0.45:  # Mean-Reversion
+                rolling_mean = prices_series.rolling(window=20).mean().to_numpy()[-1]
+                lower_floor = rolling_mean - (1.5 * atr)
+                upper_ceiling = rolling_mean + (1.5 * atr)
+
+                if current_price <= lower_floor or rsi_val < 32:
+                    metrics["signal"] = "BUY"
+                    metrics["alpha_score"] = float(100.0 - rsi_val)
+                elif current_price >= upper_ceiling or rsi_val > 68:
+                    metrics["signal"] = "SELL"
+            
+            else:  # Pivot
+                if rsi_val < 26:
+                    metrics["signal"] = "BUY"
+                    metrics["alpha_score"] = float(50.0 - rsi_val)
+                elif rsi_val > 74:
+                    metrics["signal"] = "SELL"
+
+            return metrics
+        except Exception:
+            return metrics
+
+def decide(market_state: dict, portfolio_state: dict, cash: float) -> list:
     try:
+<<<<<<< Updated upstream
         total = float(portfolio_state.get("cash", cash))
     except (TypeError, ValueError):
         total = float(cash or 0.0)
     last_prices = portfolio_state.get("last_prices", {}) or {}
-    for ticker, pos in current_positions(portfolio_state).items():
-        try:
-            price = float(last_prices.get(ticker, pos["avg_cost"]))
-        except (TypeError, ValueError):
-            price = pos["avg_cost"]
-        total += pos["quantity"] * max(price, 0.0)
+    for ticker, pos in _positions(portfolio_state).items():
+        price = last_prices.get(ticker)
+        if price:
+            total += pos["quantity"] * float(price)
     return max(total, 0.0)
+=======
+        orders = []
+        if not market_state:
+            return orders
+>>>>>>> Stashed changes
+
+        # 1. Total Portfolio Accounting & Real-Time Exposure Tracking
+        total_portfolio_value = float(cash)
+        current_gross_exposure = 0.0
+        current_positions = {}
+        active_prices = {}
+
+<<<<<<< Updated upstream
+# ---- NEW: drawdown taper multiplier ---------------------------------------
+def _taper_mult(current_equity: float) -> float:
+    """
+    Returns a multiplier (0.25-1.0) based on drawdown from peak equity.
+    1.0 = no taper (normal), 0.5 = half exposure, 0.25 = quarter exposure.
+    Peak equity is updated every day we're above the previous high.
+    """
+    global _peak_equity
+    if current_equity > _peak_equity:
+        _peak_equity = current_equity
+    if _peak_equity <= 0:
+        return 1.0
+    dd = (current_equity / _peak_equity) - 1.0
+    if dd <= DD_LOCK:
+        return TAPER_LOCK    # -10% or worse → 25% exposure
+    elif dd <= DD_HALF:
+        return TAPER_HALF    # -6% to -10% → 50% exposure
+    else:
+        return 1.0           # less than -6% → full exposure
 
 
-def _latest_bar_date(market_state: dict[str, list[dict[str, Any]]]) -> str | None:
-    bars = market_state.get("SPY") or market_state.get("QQQ") or []
-    if not bars:
-        return None
-    ts = bars[-1].get("ts")
-    if ts is None:
-        return str(len(bars))
-    # ISO dates sort lexicographically; keeping the first 10 chars handles both
-    # YYYY-MM-DD and full timestamps.
-    return str(ts)[:10]
+# ---- Core signal: what to hold and how much (with taper applied) ----------
+def target_weights(
+    market_state: dict,
+    taper: float = 1.0,
+) -> dict[str, float]:
+    global _in_cash_state
 
-
-def _days_since_rebalance(market_state: dict[str, list[dict[str, Any]]]) -> int | None:
-    if _last_rebalance_bar_date is None:
-        return None
-    bars = market_state.get("SPY") or market_state.get("QQQ") or []
-    dates = [str(b.get("ts", i))[:10] for i, b in enumerate(bars)]
-    if not dates or _last_rebalance_bar_date not in dates:
-        return None
-    return len(dates) - dates.index(_last_rebalance_bar_date) - 1
-
-
-def _market_prices(market_state: dict[str, list[dict[str, Any]]]) -> dict[str, float]:
-    prices: dict[str, float] = {}
-    for ticker, bars in market_state.items():
-        cs = closes(bars)
-        if cs:
-            prices[ticker.upper()] = cs[-1]
-    return prices
-
-
-def _risk_off_targets(market_state: dict[str, list[dict[str, Any]]]) -> dict[str, float]:
-    return {ticker: weight for ticker, weight in DEFENSIVE_WEIGHTS if closes(market_state.get(ticker))}
-
-
-def _scale_caps(weights: dict[str, float]) -> dict[str, float]:
-    capped = {t: min(max(w, 0.0), MAX_WEIGHT) for t, w in weights.items() if w > 0.0}
-    beta_gross = sum(w * BETA_MULTIPLE.get(t, 1.0) for t, w in capped.items())
-    if beta_gross > MAX_BETA_GROSS:
-        scale = MAX_BETA_GROSS / beta_gross
-        capped = {t: w * scale for t, w in capped.items()}
-    return {t: round(w, 6) for t, w in capped.items() if w > 0.001}
-
-
-def target_weights(market_state: dict[str, list[dict[str, Any]]]) -> dict[str, float]:
-    spy = closes(market_state.get("SPY"))
-    qqq = closes(market_state.get("QQQ"))
-    if len(spy) < 50 or len(qqq) < 50:
+    qqq = _closes(market_state.get(MARKET_TICKER))
+    if len(qqq) < MARKET_SMA:
         return {}
 
-    spy_sma50 = sma(spy, 50)
-    qqq_sma50 = sma(qqq, 50)
-    qqq_vol20 = realized_vol(qqq, 20)
-    risk_on = bool(
-        spy_sma50 is not None
-        and qqq_sma50 is not None
-        and qqq_vol20 is not None
-        and spy[-1] > spy_sma50
-        and qqq[-1] > qqq_sma50
-        and qqq_vol20 < 0.35
-    )
-    if not risk_on:
-        return _scale_caps(_risk_off_targets(market_state))
+    market_sma = _sma(qqq, MARKET_SMA)
+    if market_sma is None:
+        return {}
 
+    # ---- NEW: re-entry hysteresis -----------------------------------------
+    # If we're in cash, require QQQ to be 1% above SMA to re-enter.
+    # If we're invested, only exit when QQQ drops below SMA (no buffer).
+    if _in_cash_state:
+        slow_risk_on = qqq[-1] > market_sma * (1.0 + REENTRY_BUFFER)
+    else:
+        slow_risk_on = qqq[-1] > market_sma
+
+    # ---- Fast switches: vol spike OR 3-day crash (either forces cash) ------
+    fast_risk_off = _vol_is_spiking(qqq) or _fast_crash(qqq)
+
+    if not slow_risk_on or fast_risk_off:
+        _in_cash_state = True
+        return {}
+
+    _in_cash_state = False
+
+    # ---- Momentum ranking (unchanged) -------------------------------------
     scored: list[tuple[float, str]] = []
-    for ticker in RISK_CANDIDATES:
-        values = closes(market_state.get(ticker))
-        if len(values) < 61:
+    for ticker in BASKET:
+        values = _closes(market_state.get(ticker))
+        if len(values) <= MOM_LOOKBACK or len(values) < TREND_SMA:
             continue
-        mom60 = momentum(values, 60)
-        mom20 = momentum(values, 20)
-        trend50 = sma(values, 50)
-        vol20 = realized_vol(values, 20)
-        if mom60 is None or mom20 is None or trend50 is None or vol20 is None:
+        mom = _momentum(values, MOM_LOOKBACK)
+        trend = _sma(values, TREND_SMA)
+        if mom is None or trend is None:
             continue
-        trend_gap = values[-1] / trend50 - 1.0
-        score = (0.55 * mom60) + (0.25 * mom20) + (0.20 * trend_gap) - (0.15 * vol20)
-        if score > 0.0:
-            scored.append((score, ticker))
+        if values[-1] <= trend:
+            continue
+        scored.append((mom, ticker))
 
     scored.sort(reverse=True)
-    winners = [ticker for _, ticker in scored[:5]]
+    winners = [t for _, t in scored[:TOP_K]]
     if not winners:
-        return _scale_caps(_risk_off_targets(market_state))
+        return {}
 
-    qqq_sma20 = sma(qqq, 20)
-    qqq_mom20 = momentum(qqq, 20)
-    overlay_on = bool(
-        qqq_sma20 is not None
-        and qqq_sma50 is not None
-        and qqq_mom20 is not None
-        and qqq_sma20 > qqq_sma50
-        and qqq_mom20 > 0.0
-        and qqq_vol20 < 0.28
-        and closes(market_state.get("QLD"))
-        and closes(market_state.get("SSO"))
-    )
+    # ---- Vol-ratio throttle (unchanged) -----------------------------------
+    ratios: list[float] = []
+    for t in winners:
+        values = _closes(market_state.get(t))
+        current_vol = _realized_vol(values, VOL_LOOKBACK)
+        own_baseline = _realized_vol(values, MARKET_SMA)
+        if current_vol is not None and own_baseline is not None and own_baseline > 0:
+            ratios.append(current_vol / own_baseline)
 
-    weights: dict[str, float] = {}
-    base_budget = 0.76 if overlay_on else 0.92
-    per_winner = min(MAX_WEIGHT - 0.02, base_budget / len(winners))
-    for ticker in winners:
-        weights[ticker] = per_winner
+    if ratios:
+        avg_ratio = mean(ratios)
+        vol_throttle = max(MIN_WEIGHT_MULT, min(1.0, 1.0 / avg_ratio)) if avg_ratio > 0 else 1.0
+    else:
+        vol_throttle = 1.0
 
-    if overlay_on:
-        weights["QLD"] = 0.11
-        weights["SSO"] = 0.07
-
-    return _scale_caps(weights)
+    # ---- NEW: apply drawdown taper on top of vol throttle -----------------
+    combined_throttle = vol_throttle * taper
+    base_slice = (0.96 / len(winners)) * combined_throttle
+    return {t: min(MAX_WEIGHT, base_slice) for t in winners}
 
 
-def orders_to_rebalance(
+# ---- Turn target weights into orders (unchanged except MIN_TRADE_PCT) -----
+def _orders_to_rebalance(
     targets: dict[str, float],
     positions: dict[str, dict[str, float]],
     total_equity: float,
     prices: dict[str, float],
     cash_available: float,
-) -> list[dict[str, object]]:
+) -> list[dict]:
     if total_equity <= 0:
         return []
-
     min_trade = total_equity * MIN_TRADE_PCT
-    orders: list[dict[str, object]] = []
+    orders: list[dict] = []
     sell_proceeds = 0.0
 
-    # Sells first: remove stale holdings and trim overweight target holdings.
     for ticker, pos in positions.items():
         price = prices.get(ticker)
-        if price is None or price <= 0:
+        if not price or price <= 0:
             continue
-        qty = pos["quantity"]
-        current_value = qty * price
+        current_value = pos["quantity"] * price
         target_value = total_equity * targets.get(ticker, 0.0)
         delta = target_value - current_value
         if ticker not in targets:
-            sell_qty = int(qty)
-            if sell_qty > 0 and current_value >= min_trade:
-                orders.append({"ticker": ticker, "side": "sell", "quantity": sell_qty})
-                sell_proceeds += sell_qty * price
+            qty = int(pos["quantity"])
+            if qty > 0:
+                orders.append({"ticker": ticker, "side": "sell", "quantity": qty})
+                sell_proceeds += qty * price
         elif delta < -min_trade:
-            sell_qty = min(int(abs(delta) // price), int(qty))
-            if sell_qty > 0:
-                orders.append({"ticker": ticker, "side": "sell", "quantity": sell_qty})
-                sell_proceeds += sell_qty * price
+            qty = min(int(abs(delta) // price), int(pos["quantity"]))
+            if qty > 0:
+                orders.append({"ticker": ticker, "side": "sell", "quantity": qty})
+                sell_proceeds += qty * price
 
-    spendable = max(float(cash_available), 0.0) + (sell_proceeds * 0.98)
+    spendable = max(cash_available, 0.0) + sell_proceeds * 0.98
 
-    # Buys second: use expected cash after sells and skip tiny adjustments.
     for ticker, weight in sorted(targets.items()):
         price = prices.get(ticker)
-        if price is None or price <= 0:
+        if not price or price <= 0:
             continue
         current_qty = positions.get(ticker, {}).get("quantity", 0.0)
         current_value = current_qty * price
@@ -285,63 +416,156 @@ def orders_to_rebalance(
         if delta < min_trade:
             continue
         buy_value = min(delta, spendable)
-        buy_qty = int(buy_value // price)
-        if buy_qty > 0:
-            orders.append({"ticker": ticker, "side": "buy", "quantity": buy_qty})
-            spendable -= buy_qty * price
+        qty = int(buy_value // price)
+        if qty > 0:
+            orders.append({"ticker": ticker, "side": "buy", "quantity": qty})
+            spendable -= qty * price
 
-    return orders[:45]
-
-
-def _has_position_drifted(portfolio_state: dict[str, Any], total_equity: float) -> bool:
-    if total_equity <= 0:
-        return False
-    last_prices = portfolio_state.get("last_prices", {}) or {}
-    for ticker, pos in current_positions(portfolio_state).items():
-        try:
-            price = float(last_prices.get(ticker, pos["avg_cost"]))
-        except (TypeError, ValueError):
-            price = pos["avg_cost"]
-        if price > 0 and (pos["quantity"] * price / total_equity) > DRIFT_LIMIT:
-            return True
-    return False
+    return orders[:40]
 
 
-def decide(
-    market_state: dict,
-    portfolio_state: dict,
-    cash: float,
-) -> list[dict]:
-    """Return a list of long-only buy/sell orders."""
-    global _last_rebalance_bar_date, _last_targets
+# ---- Entry point ----------------------------------------------------------
+def decide(market_state: dict, portfolio_state: dict, cash: float) -> list[dict]:
+    """Called once per day. Returns a list of long-only orders."""
+    global _last_rebalance_date, _peak_equity, _in_cash_state
 
     if not market_state:
         return []
 
-    latest_date = _latest_bar_date(market_state)
+    latest_date = _bar_date(market_state, MARKET_TICKER)
     if latest_date is None:
         return []
 
-    total_equity = equity(portfolio_state, cash)
-    days_since = _days_since_rebalance(market_state)
-    drifted = _has_position_drifted(portfolio_state, total_equity)
-    should_rebalance = (
-        _last_rebalance_bar_date is None
+    qqq = _closes(market_state.get(MARKET_TICKER))
+
+    # Fast risk-off check — runs every day regardless of rebalance schedule
+    fast_risk_off_today = (
+        (_vol_is_spiking(qqq) or _fast_crash(qqq)) if qqq else False
+    )
+
+    days_since = _days_since(market_state, MARKET_TICKER, _last_rebalance_date)
+    scheduled_rebalance = (
+        _last_rebalance_date is None
         or days_since is None
         or days_since >= REBALANCE_EVERY_DAYS
-        or drifted
     )
-    if not should_rebalance:
+
+    positions = _positions(portfolio_state)
+    holding_anything = len(positions) > 0
+
+    should_act = scheduled_rebalance or (fast_risk_off_today and holding_anything)
+    if not should_act:
         return []
 
-    targets = target_weights(market_state)
-    if not targets:
-        return []
+    # ---- NEW: compute taper from current drawdown -------------------------
+    current_equity = _equity(portfolio_state, cash)
+    taper = _taper_mult(current_equity)
 
-    prices = _market_prices(market_state)
-    positions = current_positions(portfolio_state)
-    orders = orders_to_rebalance(targets, positions, total_equity, prices, cash)
-    if orders:
-        _last_rebalance_bar_date = latest_date
-        _last_targets = targets
+    prices = {t: _closes(b)[-1] for t, b in market_state.items() if _closes(b)}
+
+    # Pass taper into target_weights so it scales exposure down during drawdowns
+    targets = target_weights(market_state, taper=taper)
+
+    orders = _orders_to_rebalance(targets, positions, current_equity, prices, cash)
+
+    if scheduled_rebalance:
+        _last_rebalance_date = latest_date
     return orders
+=======
+        for ticker, p_val in portfolio_state.items():
+            qty_held = p_val.get('quantity', p_val.get('qty', 0)) if isinstance(p_val, dict) else p_val
+            if qty_held and float(qty_held) > 0:
+                current_positions[ticker] = float(qty_held)
+
+        for ticker, bars in market_state.items():
+            if bars:
+                try:
+                    last_bar = bars[-1]
+                    price = last_bar.get("close", last_bar.get("price", last_bar.get("open", 0)))
+                    active_prices[ticker] = float(price)
+                except Exception:
+                    continue
+
+        # Calculate exact Net Asset Value (NAV) and starting Gross Exposure
+        for ticker, qty in current_positions.items():
+            if ticker in active_prices:
+                pos_value = qty * active_prices[ticker]
+                total_portfolio_value += pos_value
+                current_gross_exposure += pos_value
+
+        available_cash = float(cash)
+        buy_candidates = []
+
+        # 2. Extract Immediate Closures to Free Up Leverage Space First
+        for ticker, bars in market_state.items():
+            if not bars or len(bars) < 30:
+                continue
+            
+            try:
+                df = pd.DataFrame(bars)
+                analysis = InstitutionalAlphaEngine.evaluate_asset(df)
+                current_price = active_prices.get(ticker, analysis["price"])
+                
+                if current_price <= 0:
+                    continue
+
+                qty_held = current_positions.get(ticker, 0.0)
+
+                if analysis["signal"] == "SELL" and qty_held > 0:
+                    orders.append({"ticker": str(ticker), "side": "sell", "quantity": int(qty_held)})
+                    # Credit exposure and cash pools back immediately for the current calculation turn
+                    current_gross_exposure -= (qty_held * current_price)
+                    available_cash += (qty_held * current_price)
+                
+                elif analysis["signal"] == "BUY":
+                    buy_candidates.append({
+                        "ticker": str(ticker),
+                        "price": float(current_price),
+                        "score": float(analysis["alpha_score"]),
+                        "atr_pct": float(analysis["atr_pct"]),
+                        "qty_held": float(qty_held)
+                    })
+            except Exception:
+                continue
+
+        # 3. Dynamic Leverage Allocation Layer
+        # Hard ceiling: Maximum total exposure allowed across the whole portfolio is 1.42x NAV
+        max_absolute_exposure = total_portfolio_value * 1.42
+        
+        # Sort opportunities by highest calculated Alpha score
+        buy_candidates = sorted(buy_candidates, key=lambda x: x["score"], reverse=True)[:5]
+
+        for candidate in buy_candidates:
+            try:
+                # Continuous real-time check of remaining room below the leverage ceiling
+                remaining_leverage_room = max_absolute_exposure - current_gross_exposure
+                if remaining_leverage_room <= 0:
+                    break
+
+                ticker = candidate["ticker"]
+                price = candidate["price"]
+                atr_pct = candidate["atr_pct"]
+                qty_held = candidate["qty_held"]
+
+                # Inverse-Volatility sizing base metric
+                base_allocation = total_portfolio_value * (0.02 / (atr_pct + 1e-5))
+                
+                # Interlocking Guardrails: Protect cash, individual concentration limits, and overall leverage room
+                target_spend = min(base_allocation, total_portfolio_value * 0.15, available_cash * 0.35, remaining_leverage_room)
+                max_allowed_spend = (total_portfolio_value * 0.24) - (qty_held * price)
+                
+                final_spend = min(target_spend, max_allowed_spend)
+                if final_spend > 0:
+                    quantity = int(final_spend / price)
+                    if quantity > 0:
+                        orders.append({"ticker": ticker, "side": "buy", "quantity": quantity})
+                        available_cash -= (quantity * price)
+                        current_gross_exposure += (quantity * price)
+            except Exception:
+                continue
+
+        return orders
+
+    except Exception:
+        return []
+>>>>>>> Stashed changes
