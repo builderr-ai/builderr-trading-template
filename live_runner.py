@@ -130,6 +130,9 @@ PRIVATE_FIELD = [
     ("miroslav_agent.py", "miroslav", "round 2 · entrant"),
     ("shridhar_agent.py", "shridhar", "round 2 · entrant"),
     ("p1vs_agent.py", "p1vs", "round 2 · entrant"),
+    ("brierwise_agent.py", "brierwise", "round 2 · entrant"),
+    ("nethra_agent.py", "nethra", "round 2 · entrant"),
+    ("atharv_agent.py", "atharv", "round 2 · entrant"),
 ]
 
 EVAL_DAYS = 60       # (history sizing only) trailing window used when fetching bars
@@ -231,14 +234,14 @@ ENTRY = {
     "eduardo": "2026-09-08",
     # Submission received before the Sep 30 US market open; score forward only.
     "gugan": "2026-10-19",
-    "p1vs": "2026-10-19",
+    "p1vs": "2026-10-29",
     "shridhar": "2026-10-19",
     "miroslav": "2026-10-19",
     "tae_gul_kim": "2026-10-19",
     "unfire_rotation": "2026-10-19",
-    "hardik_gautam": "2026-10-19",
+    "hardik_gautam": "2026-10-29",
     "jaswanth": "2026-10-19",
-    "danyblitz": "2026-10-19",
+    "danyblitz": "2026-10-29",
     "unfire_initial": "2026-10-19",
     "manish": "2026-10-19",
     "siri_nandan": "2026-10-19",
@@ -246,6 +249,9 @@ ENTRY = {
     "hardik_hinduja": "2026-10-19",
     "alex_cedar": "2026-10-19",
     "raymond": "2026-10-19",
+    "brierwise": "2026-10-29",
+    "nethra": "2026-10-29",
+    "atharv": "2026-10-29",
 }
 CHART_START = ROUND_START    # common x-axis for the illustrative race chart (Round 2 open)
 SLIP_EQUITY = 0.0005
