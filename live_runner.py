@@ -225,7 +225,9 @@ ENTRY = {
     # Corrected submission arrived before the Jul 13 US market open.
     "elamaran": "2026-07-13",
     # Latest revision received Jul 27; score only from the first session after receipt.
-    "dhruv": "2026-07-28",
+    # Revision dc59e80 (archive received Oct 19, loaded Oct 31): forward only, from the
+    # first session after loading (Mon Nov 2). The earlier result is dropped.
+    "dhruv": "2026-11-02",
     # Submission arrived after the Jul 20 close; score it forward from Jul 21.
     "vishal": "2026-07-21",
     # Endpoint submission arrived after the Aug 10 close; score from Aug 11.
@@ -243,14 +245,16 @@ ENTRY = {
     "jaswanth": "2026-10-19",
     "danyblitz": "2026-10-29",
     "unfire_initial": "2026-10-19",
-    "manish": "2026-10-19",
+    # Revision 47bef04 (branch submission-v2) loaded Oct 31; forward only from Mon Nov 2.
+    "manish": "2026-11-02",
     "siri_nandan": "2026-10-19",
     "avinash": "2026-10-19",
     "hardik_hinduja": "2026-10-19",
     "alex_cedar": "2026-10-19",
     "raymond": "2026-10-19",
     "brierwise": "2026-10-29",
-    "nethra": "2026-10-29",
+    # Revision e1623fd (main) loaded Oct 31; forward only from Mon Nov 2.
+    "nethra": "2026-11-02",
     "atharv": "2026-10-29",
 }
 CHART_START = ROUND_START    # common x-axis for the illustrative race chart (Round 2 open)

@@ -116,12 +116,12 @@ def test_market_context_can_remain_full_buy_and_hold() -> None:
 
 
 def test_pending_entries_are_forward_only() -> None:
-    expected = {"brierwise", "hardik_gautam", "p1vs", "nethra", "danyblitz", "atharv"}
-    pending = live_runner.pending_entries("2026-10-28")
+    expected = {"dhruv", "manish", "nethra"}
+    pending = live_runner.pending_entries("2026-10-30")
     assert {r["name"] for r in pending} == expected, pending
-    assert all(r["since"] == "2026-10-29" for r in pending)
-    assert live_runner.pending_entries("2026-10-29") == []
-    bars = {"QQQ": [_bar("2026-10-27", 100, 100), _bar("2026-10-28", 100, 110)]}
+    assert all(r["since"] == "2026-11-02" for r in pending)
+    assert live_runner.pending_entries("2026-11-02") == []
+    bars = {"QQQ": [_bar("2026-10-29", 100, 100), _bar("2026-10-30", 100, 110)]}
     for name in expected:
         result = live_runner.run_bot(_buy_one_qqq, bars, live_runner.ENTRY[name])
         assert result["days"] == result["trades"] == 0, (name, result)
