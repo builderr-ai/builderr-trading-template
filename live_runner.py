@@ -141,9 +141,9 @@ START_CASH = 100_000.0
 ROUND_ID = "trading-v0-round-2"
 ROUND_NAME = "Round 2"
 ROUND_START = "2026-07-07"   # Round 2 starts at the Jul 7, 2026 US market open.
-ROUND_END = "2026-11-09"     # Round 2 ends at the Nov 9, 2026 US market close; later sessions never count.
-SUBMISSIONS_CLOSE = "2026-10-31"  # last date a new or revised agent can be admitted.
-RESULTS_BY = "2026-11-10"
+ROUND_END = "2026-11-25"     # Round 2 ends at the Nov 25, 2026 US market close; later sessions never count.
+SUBMISSIONS_CLOSE = "2026-11-15"  # last date a new or revised agent can be admitted.
+RESULTS_BY = "2026-11-30"  # "by the end of November"; no exact day promised
 ROUND_END_CLOSE_ET = "16:00"
 
 
