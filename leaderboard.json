@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-11-27T16:34:47Z",
+  "generated_at_utc": "2026-11-27T17:35:50Z",
   "as_of_market_date": "2026-11-25",
   "round_id": "trading-v0-round-2",
   "round_name": "Round 2",
@@ -310,8 +310,8 @@
     {
       "name": "tanishq",
       "label": "round 2 \u00b7 entrant",
-      "equity": 98925.56,
-      "pnl": -1074.44,
+      "equity": 98925.55,
+      "pnl": -1074.45,
       "ret": -0.0107,
       "trades": 95,
       "days": 101,
@@ -332,8 +332,8 @@
     {
       "name": "yog",
       "label": "round 2 \u00b7 entrant",
-      "equity": 98713.81,
-      "pnl": -1286.19,
+      "equity": 98713.8,
+      "pnl": -1286.2,
       "ret": -0.0129,
       "trades": 86,
       "days": 101,
@@ -343,8 +343,8 @@
     {
       "name": "krunal",
       "label": "round 2 \u00b7 entrant",
-      "equity": 98713.81,
-      "pnl": -1286.19,
+      "equity": 98713.8,
+      "pnl": -1286.2,
       "ret": -0.0129,
       "trades": 86,
       "days": 101,
@@ -420,8 +420,8 @@
     {
       "name": "robert",
       "label": "round 2 \u00b7 entrant",
-      "equity": 97958.37,
-      "pnl": -2041.63,
+      "equity": 97958.36,
+      "pnl": -2041.64,
       "ret": -0.0204,
       "trades": 109,
       "days": 101,
@@ -497,8 +497,8 @@
     {
       "name": "sham",
       "label": "round 2 \u00b7 entrant",
-      "equity": 96639.98,
-      "pnl": -3360.02,
+      "equity": 96639.99,
+      "pnl": -3360.01,
       "ret": -0.0336,
       "trades": 213,
       "days": 77,
@@ -717,8 +717,8 @@
     {
       "name": "siddu",
       "label": "round 2 \u00b7 entrant",
-      "equity": 89039.66,
-      "pnl": -10960.34,
+      "equity": 89039.65,
+      "pnl": -10960.35,
       "ret": -0.1096,
       "trades": 189,
       "days": 101,
