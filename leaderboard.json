@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-11-27T15:33:49Z",
+  "generated_at_utc": "2026-11-27T16:34:47Z",
   "as_of_market_date": "2026-11-25",
   "round_id": "trading-v0-round-2",
   "round_name": "Round 2",
@@ -321,8 +321,8 @@
     {
       "name": "raam",
       "label": "round 2 \u00b7 entrant",
-      "equity": 98865.89,
-      "pnl": -1134.11,
+      "equity": 98865.88,
+      "pnl": -1134.12,
       "ret": -0.0113,
       "trades": 114,
       "days": 101,
@@ -332,8 +332,8 @@
     {
       "name": "yog",
       "label": "round 2 \u00b7 entrant",
-      "equity": 98713.8,
-      "pnl": -1286.2,
+      "equity": 98713.81,
+      "pnl": -1286.19,
       "ret": -0.0129,
       "trades": 86,
       "days": 101,
@@ -343,8 +343,8 @@
     {
       "name": "krunal",
       "label": "round 2 \u00b7 entrant",
-      "equity": 98713.8,
-      "pnl": -1286.2,
+      "equity": 98713.81,
+      "pnl": -1286.19,
       "ret": -0.0129,
       "trades": 86,
       "days": 101,
@@ -420,8 +420,8 @@
     {
       "name": "robert",
       "label": "round 2 \u00b7 entrant",
-      "equity": 97958.36,
-      "pnl": -2041.64,
+      "equity": 97958.37,
+      "pnl": -2041.63,
       "ret": -0.0204,
       "trades": 109,
       "days": 101,
@@ -486,8 +486,8 @@
     {
       "name": "elamaran",
       "label": "round 2 \u00b7 entrant",
-      "equity": 96880.8,
-      "pnl": -3119.2,
+      "equity": 96880.79,
+      "pnl": -3119.21,
       "ret": -0.0312,
       "trades": 86,
       "days": 97,
